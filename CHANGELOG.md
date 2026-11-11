@@ -6,7 +6,17 @@ API between minor releases.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-11
+
 ### Added
+- Entity decoding: common entity data (extended data chain, graphics preview, entity mode, reactors, colour,
+  linetype scale, visual styles, invisibility, lineweight) and geometry bodies for LINE, CIRCLE, ARC and POINT.
+- `DwgDocument.Entities`: decoded entities with geometry; exposed in the JSON export
+  and in `dwgio inspect` (entity-kind counts and sample coordinates).
+- Bit-packed primitives: packed 32- and 64-bit integers, packed doubles, doubles stored as a patch of a default
+  value, unpacked doubles and single bits; corrected the 2-bit tags of packed shorts (tag 11 = 256) and packed
+  integers (tag 00 = full 32-bit value).
+- Banner and logo redrawn.
 - Contributing guide, security policy, code of conduct, issue and pull request templates, Dependabot configuration
   and a description of the private test fixtures (`docs/test-fixtures.md`).
 - Documentation site built with docfx: getting started, public API and the generated API reference.
@@ -45,18 +55,6 @@ API between minor releases.
   presizes its output only up to 1 MiB instead of trusting the size declared in the file.
 - `DwgDocument.Open` and `ReadSection` report malformed data as `DwgException` (with the original exception as
   `InnerException`), and the best-effort section readers record such failures in `Diagnostics`.
-
-## [0.4.0] - 2026-11-11
-
-### Added
-- Entity decoding: common entity data (extended data chain, graphics preview, entity mode, reactors, colour,
-  linetype scale, visual styles, invisibility, lineweight) and geometry bodies for LINE, CIRCLE, ARC and POINT.
-- `DwgDocument.Entities`: decoded entities with geometry; exposed in the JSON export
-  and in `dwgio inspect` (entity-kind counts and sample coordinates).
-- Bit-packed primitives: packed 32- and 64-bit integers, packed doubles, doubles stored as a patch of a default
-  value, unpacked doubles and single bits; corrected the 2-bit tags of packed shorts (tag 11 = 256) and packed
-  integers (tag 00 = full 32-bit value).
-- Banner and logo redrawn.
 
 ### Known limitations
 - Some entity bodies are not decoded yet; they are recorded in `DwgDocument.Diagnostics`.
