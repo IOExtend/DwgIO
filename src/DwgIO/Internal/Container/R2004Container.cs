@@ -8,6 +8,19 @@ namespace DwgIO.Internal.Container;
 /// </summary>
 internal sealed class R2004Container
 {
+    private long _decompressedBytes;
+
+    /// <summary>Ceiling on section buffers allocated plus page bytes produced by all section reads of one document.</summary>
+    public long MaxDecompressedBytes { get; init; } = 8L * 1024 * 1024 * 1024;
+
+    private void Charge(long bytes)
+    {
+        if (Interlocked.Add(ref _decompressedBytes, bytes) > MaxDecompressedBytes)
+        {
+            throw new DwgException($"Sections of this file expand to more than {MaxDecompressedBytes} bytes in total.");
+        }
+    }
+
     /// <summary>Decrypted file header.</summary>
     public required DwgContainerHeader Header { get; init; }
 
@@ -44,7 +57,22 @@ internal sealed class R2004Container
             throw new DwgException($"Section '{entry.Name}' is encrypted; encrypted payloads are not supported.");
         }
 
-        long totalSize = (long)entry.Size;
+        // A page never decompresses to more than the section's page size.
+        var pageLimits = new Lz77Decoder.Limits
+        {
+            MaxOutputBytes = (int)Math.Min(entry.MaxPageSize, (uint)Lz77Decoder.Limits.Default.MaxOutputBytes),
+        };
+
+        // The size comes from the file: check it before allocating the result.
+        if (entry.Size > (ulong)Array.MaxLength || entry.Size > (ulong)entry.PageCount * (ulong)pageLimits.MaxOutputBytes)
+        {
+            throw new DwgException(
+                $"Section '{entry.Name}' declares {entry.Size} bytes, more than {entry.PageCount} pages of up to {pageLimits.MaxOutputBytes} bytes " +
+                "or a single buffer can hold.");
+        }
+
+        int totalSize = (int)entry.Size;
+        Charge(totalSize); // the result buffer counts against the document budget before it exists
         var result = new byte[totalSize];
 
         foreach (var pageRef in entry.Pages)
@@ -52,7 +80,7 @@ internal sealed class R2004Container
             var page = PageMap.Find((int)pageRef.PageNumber)
                 ?? throw new DwgException($"Section '{entry.Name}' references page {pageRef.PageNumber} missing from the page map.");
 
-            var pageHeader = DataPageHeader.Parse(fileBytes, page.FileOffset);
+            var pageHeader = DataPageHeader.Parse(fileBytes, page.FileOffset, verifyChecksums);
             if (pageHeader.PageType != DataPageHeader.ExpectedPageType)
             {
                 throw new DwgException(
@@ -73,24 +101,27 @@ internal sealed class R2004Container
                 throw new DwgException($"Section '{entry.Name}' page {pageRef.PageNumber} payload is truncated.");
             }
 
+            if (pageRef.StartOffset >= entry.Size)
+            {
+                continue; // zero page beyond the section end
+            }
+
             var payload = new byte[pageHeader.DataSize];
             Buffer.BlockCopy(fileBytes, (int)payloadStart, payload, 0, (int)pageHeader.DataSize);
 
             byte[] decompressed = entry.Compression switch
             {
                 1 => payload,
-                2 => Lz77Decoder.Decompress(payload, (int)entry.MaxPageSize),
+                2 => Lz77Decoder.Decompress(payload, pageLimits.MaxOutputBytes, pageLimits),
                 _ => throw new DwgException($"Section '{entry.Name}' has unknown compression flag {entry.Compression}."),
             };
 
-            long start = (long)pageRef.StartOffset;
-            if (start >= totalSize)
-            {
-                continue; // zero page beyond the section end
-            }
+            // Page references may repeat, so the total work per document is capped as well.
+            Charge(decompressed.Length);
 
-            int take = (int)Math.Min(decompressed.Length, totalSize - start);
-            Buffer.BlockCopy(decompressed, 0, result, (int)start, take);
+            int start = (int)pageRef.StartOffset;
+            int take = Math.Min(decompressed.Length, totalSize - start);
+            Buffer.BlockCopy(decompressed, 0, result, start, take);
         }
 
         return result;
