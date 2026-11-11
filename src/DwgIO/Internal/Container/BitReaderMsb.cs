@@ -75,7 +75,7 @@ internal sealed class BitReaderMsb(byte[] bytes)
         uint tag = ReadTwoBits();
         return tag switch
         {
-            0 => (uint)ReadBits(32),
+            0 => ReadRawUInt32(),
             1 => (uint)ReadBits(8),
             _ => 0,
         };
@@ -89,7 +89,7 @@ internal sealed class BitReaderMsb(byte[] bytes)
         uint tag = ReadTwoBits();
         return tag switch
         {
-            0 => (uint)ReadBits(16),
+            0 => ReadRawByte() | (uint)ReadRawByte() << 8, // operands run left to right: low byte first
             1 => (uint)ReadBits(8),
             2 => 0,
             _ => 256,
