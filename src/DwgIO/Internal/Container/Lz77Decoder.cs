@@ -25,6 +25,8 @@ internal static class Lz77Decoder
         public int MaxBackrefLength { get; init; } = 1024 * 1024;
     }
 
+    private const int MaxPresizeBytes = 1024 * 1024;
+
     /// <summary>
     /// Decompresses <paramref name="input"/>; <paramref name="expectedSize"/> only presizes
     /// the output buffer and <paramref name="limits"/> defaults to <see cref="Limits.Default"/>.
@@ -32,7 +34,8 @@ internal static class Lz77Decoder
     public static byte[] Decompress(byte[] input, int? expectedSize = null, Limits? limits = null)
     {
         limits ??= Limits.Default;
-        var output = new MemoryStream(expectedSize ?? 4096);
+        // The expected size comes from the file, so it only presizes within the limit and a small cap.
+        var output = new MemoryStream(Math.Clamp(expectedSize ?? 4096, 0, Math.Min(limits.MaxOutputBytes, MaxPresizeBytes)));
         int position = 0;
 
         int ReadByte()
@@ -239,10 +242,10 @@ internal static class Lz77Decoder
             }
 
             // Byte-at-a-time: the source may overlap the destination (RLE-style runs).
-            var buffer = output.GetBuffer();
+            // The buffer is fetched per byte because WriteByte may replace it when growing.
             for (int i = 0; i < compBytes; i++)
             {
-                output.WriteByte(buffer[start + i]);
+                output.WriteByte(output.GetBuffer()[start + i]);
             }
 
             CopyLiteral(literalCount);

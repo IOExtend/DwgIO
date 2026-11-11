@@ -86,7 +86,7 @@ internal static class PreviewParser
 
     private static byte[]? Extract(byte[] data, (int start, int size)? range)
     {
-        if (range is not { } r || r.start <= 0 || r.size <= 0 || r.start + r.size > data.Length)
+        if (range is not { } r || r.start <= 0 || r.size <= 0 || r.size > data.Length - r.start)
         {
             return null;
         }

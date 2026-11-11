@@ -106,6 +106,18 @@ public sealed class DwgDocument
 
         options ??= DwgReaderOptions.Default;
         var fileBytes = File.ReadAllBytes(path);
+        try
+        {
+            return Parse(path, fileBytes, options);
+        }
+        catch (Exception ex) when (ex is not DwgException && IsParseFailure(ex))
+        {
+            throw Corrupt(ex);
+        }
+    }
+
+    private static DwgDocument Parse(string path, byte[] fileBytes, DwgReaderOptions options)
+    {
         var fileHeader = DwgFileHeader.Parse(fileBytes);
 
         if (fileHeader.Version.Family != DwgContainerFamily.R2004Family)
@@ -130,8 +142,22 @@ public sealed class DwgDocument
             ?? throw new DwgException("The document was opened without its section map (ReadSectionMap = false).");
         var entry = container.SectionMap.FindByName(name)
             ?? throw new DwgException($"Section '{name}' not found. Available: {string.Join(", ", container.SectionMap.Sections.Select(s => s.Name))}");
-        return container.ReadSection(_fileBytes, entry, _verifyChecksums);
+        try
+        {
+            return container.ReadSection(_fileBytes, entry, _verifyChecksums);
+        }
+        catch (Exception ex) when (ex is not DwgException && IsParseFailure(ex))
+        {
+            throw Corrupt(ex);
+        }
     }
+
+    // Malformed data can surface as these runtime exceptions before a parser check rejects it.
+    private static bool IsParseFailure(Exception ex) =>
+        ex is DwgException or ArgumentException or OverflowException or IndexOutOfRangeException or InvalidOperationException;
+
+    private static DwgException Corrupt(Exception ex) =>
+        new($"The file is corrupt or truncated: {ex.Message}", ex);
 
     private DwgSummaryInfo? ReadOptionalSummaryInfo()
     {
@@ -156,7 +182,7 @@ public sealed class DwgDocument
         {
             return DwgHandleMap.Parse(ReadSectionCore(entry));
         }
-        catch (DwgException ex)
+        catch (Exception ex) when (IsParseFailure(ex))
         {
             _diagnostics.Add($"AcDb:Handles: {ex.Message}");
             return null;
@@ -176,7 +202,7 @@ public sealed class DwgDocument
             _objectStreamBytes = ReadSectionCore(entry);
             return ObjectStreamWalker.Walk(_objectStreamBytes, r2010Plus: FileHeader.Version.Year >= 2010);
         }
-        catch (DwgException ex)
+        catch (Exception ex) when (IsParseFailure(ex))
         {
             _diagnostics.Add($"AcDb:AcDbObjects: {ex.Message}");
             return [];
@@ -206,7 +232,7 @@ public sealed class DwgDocument
                     entities.Add(entity);
                 }
             }
-            catch (DwgException ex)
+            catch (Exception ex) when (IsParseFailure(ex))
             {
                 _diagnostics.Add($"entity {info.Handle:X} @{info.StreamOffset} (type 0x{info.TypeCode:X}): {ex.Message}");
             }
@@ -234,7 +260,7 @@ public sealed class DwgDocument
         {
             return parse(ReadSectionCore(entry));
         }
-        catch (DwgException ex)
+        catch (Exception ex) when (IsParseFailure(ex))
         {
             // Metadata is best-effort: a malformed section must not fail the whole document.
             _diagnostics.Add($"{sectionName}: {ex.Message}");

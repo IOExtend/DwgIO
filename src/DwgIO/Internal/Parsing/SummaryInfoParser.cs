@@ -219,6 +219,11 @@ internal static class SummaryInfoParser
         }
 
         var baseDate = new DateTime((int)year, (int)month, (int)d, 0, 0, 0, DateTimeKind.Utc);
+        if (ms > (DateTime.MaxValue - baseDate).TotalMilliseconds)
+        {
+            return null; // the time of day would pass the last representable date
+        }
+
         return baseDate.AddMilliseconds(ms).Ticks;
     }
 

@@ -41,8 +41,11 @@ internal sealed class DataPageHeader
     /// <summary>Whether the page checksum over the zeroed header matches <see cref="HeaderChecksum"/>.</summary>
     public bool HeaderChecksumValid { get; private set; }
 
-    /// <summary>Unmasks and parses the data page header at <paramref name="fileOffset"/> and computes both checksum flags.</summary>
-    public static DataPageHeader Parse(byte[] fileBytes, ulong fileOffset)
+    /// <summary>
+    /// Unmasks and parses the data page header at <paramref name="fileOffset"/>; computes both
+    /// checksum flags only when <paramref name="computeChecksums"/> is set (they stay false otherwise).
+    /// </summary>
+    public static DataPageHeader Parse(byte[] fileBytes, ulong fileOffset, bool computeChecksums)
     {
         if (fileOffset + 0x20 > (ulong)fileBytes.Length)
         {
@@ -63,6 +66,16 @@ internal sealed class DataPageHeader
             HeaderChecksum = BinaryPrimitives.ReadUInt32LittleEndian(hdr.AsSpan(24)),
             DataChecksum = BinaryPrimitives.ReadUInt32LittleEndian(hdr.AsSpan(28)),
         };
+
+        if (!computeChecksums)
+        {
+            return header;
+        }
+
+        if (fileOffset + 0x20 + header.DataSize > (ulong)fileBytes.Length)
+        {
+            throw new DwgException($"Data page at {fileOffset} is truncated: its payload needs {header.DataSize} bytes.");
+        }
 
         // The data checksum covers the stored payload (seed 0); the header checksum
         // covers these 0x20 bytes with its own field zeroed, seeded with the data checksum.
@@ -149,7 +162,7 @@ internal sealed class SectionMap
         return new SectionMap { Sections = DecodeSectionEntries(decompressed) };
     }
 
-    private static List<SectionEntry> DecodeSectionEntries(byte[] data)
+    internal static List<SectionEntry> DecodeSectionEntries(byte[] data)
     {
         if (data.Length < 0x14)
         {
@@ -158,6 +171,13 @@ internal sealed class SectionMap
 
         int entryCount = BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(0));
         int cursor = 0x14;
+
+        // Counts come from the file: check them against the buffer before sizing lists.
+        if (entryCount < 0 || entryCount > (data.Length - cursor) / 0x60)
+        {
+            throw new DwgException($"Section map declares {entryCount} entries, more than its {data.Length} bytes can hold.");
+        }
+
         var result = new List<SectionEntry>(entryCount);
         for (int n = 0; n < entryCount; n++)
         {
@@ -182,6 +202,11 @@ internal sealed class SectionMap
 
             string name = Encoding.UTF8.GetString(data, cursor + 32, nameEnd - (cursor + 32));
             cursor += 0x60;
+
+            if (pageCount > (uint)(data.Length - cursor) / 16)
+            {
+                throw new DwgException($"Section '{name}' declares {pageCount} pages, more than the section map can hold.");
+            }
 
             var pages = new List<PageRef>((int)pageCount);
             for (uint p = 0; p < pageCount; p++)
