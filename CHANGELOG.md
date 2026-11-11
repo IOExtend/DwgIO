@@ -37,8 +37,8 @@ API between minor releases.
 ### Fixed
 - Crafted files can no longer cause huge allocations, integer overflow in bounds checks or crashes with exceptions
   other than `DwgException`: declared section sizes are checked against their page count, page size and the largest
-  array before allocation; each page is limited to the section's page size and all pages of one document to 8 GiB of
-  decompressed data; section-map entry and page counts are checked against the map before lists are sized; preview
+  array before allocation; each page is limited to the section's page size; section buffers and decompressed pages of
+  one document together are limited to 8 GiB; section-map entry and page counts are checked against the map before lists are sized; preview
   image ranges, page payload sizes and SummaryInfo dates are range-checked; pages past the section end are no longer
   decompressed; page checksums are computed only when `VerifyChecksums` is set.
 - The decompressor no longer reads a stale buffer when the output grows during an overlapping back-reference, and it

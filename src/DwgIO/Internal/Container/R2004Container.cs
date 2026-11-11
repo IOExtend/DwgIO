@@ -10,8 +10,16 @@ internal sealed class R2004Container
 {
     private long _decompressedBytes;
 
-    /// <summary>Ceiling on page bytes produced by all section reads of one document.</summary>
+    /// <summary>Ceiling on section buffers allocated plus page bytes produced by all section reads of one document.</summary>
     public long MaxDecompressedBytes { get; init; } = 8L * 1024 * 1024 * 1024;
+
+    private void Charge(long bytes)
+    {
+        if (Interlocked.Add(ref _decompressedBytes, bytes) > MaxDecompressedBytes)
+        {
+            throw new DwgException($"Sections of this file expand to more than {MaxDecompressedBytes} bytes in total.");
+        }
+    }
 
     /// <summary>Decrypted file header.</summary>
     public required DwgContainerHeader Header { get; init; }
@@ -49,22 +57,23 @@ internal sealed class R2004Container
             throw new DwgException($"Section '{entry.Name}' is encrypted; encrypted payloads are not supported.");
         }
 
-        // The size comes from the file: check it before allocating the result.
-        if (entry.Size > (ulong)Array.MaxLength || entry.Size > (ulong)entry.PageCount * entry.MaxPageSize)
-        {
-            throw new DwgException(
-                $"Section '{entry.Name}' declares {entry.Size} bytes, more than {entry.PageCount} pages of up to {entry.MaxPageSize} bytes " +
-                "or a single buffer can hold.");
-        }
-
-        int totalSize = (int)entry.Size;
-        var result = new byte[totalSize];
-
         // A page never decompresses to more than the section's page size.
         var pageLimits = new Lz77Decoder.Limits
         {
             MaxOutputBytes = (int)Math.Min(entry.MaxPageSize, (uint)Lz77Decoder.Limits.Default.MaxOutputBytes),
         };
+
+        // The size comes from the file: check it before allocating the result.
+        if (entry.Size > (ulong)Array.MaxLength || entry.Size > (ulong)entry.PageCount * (ulong)pageLimits.MaxOutputBytes)
+        {
+            throw new DwgException(
+                $"Section '{entry.Name}' declares {entry.Size} bytes, more than {entry.PageCount} pages of up to {pageLimits.MaxOutputBytes} bytes " +
+                "or a single buffer can hold.");
+        }
+
+        int totalSize = (int)entry.Size;
+        Charge(totalSize); // the result buffer counts against the document budget before it exists
+        var result = new byte[totalSize];
 
         foreach (var pageRef in entry.Pages)
         {
@@ -108,10 +117,7 @@ internal sealed class R2004Container
             };
 
             // Page references may repeat, so the total work per document is capped as well.
-            if (Interlocked.Add(ref _decompressedBytes, decompressed.Length) > MaxDecompressedBytes)
-            {
-                throw new DwgException($"Section pages of this file expand to more than {MaxDecompressedBytes} bytes in total.");
-            }
+            Charge(decompressed.Length);
 
             int start = (int)pageRef.StartOffset;
             int take = Math.Min(decompressed.Length, totalSize - start);
