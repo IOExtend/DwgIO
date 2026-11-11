@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>DwgIO</PackageId>
+    <Description>Reads Autodesk DWG drawings (.dwg) without AutoCAD and exposes sections, metadata and entities.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="DwgIO.Tests" />
+  </ItemGroup>
+
+</Project>

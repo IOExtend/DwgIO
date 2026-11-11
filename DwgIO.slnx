@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="src/DwgIO/DwgIO.csproj" />
+  <Project Path="src/DwgIO.Cli/DwgIO.Cli.csproj" />
+  <Project Path="tests/DwgIO.Tests/DwgIO.Tests.csproj" />
+</Solution>

@@ -1,0 +1,26 @@
+bin/
+obj/
+out/
+publish/
+*.user
+.vs/
+.idea/
+.idea_modules/
+*.sln.DotSettings.user
+TestResults/
+artifacts/
+*.binlog
+*.tmp
+*.suo
+
+# Private test fixtures and drawings never go into the repository
+test_files/
+*.dwg
+*.dxf
+*.bak
+*.nupkg
+*.snupkg
+
+# Documentation site (DocFX output and generated API pages)
+_site/
+docs/api/
