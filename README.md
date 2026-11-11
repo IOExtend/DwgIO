@@ -96,6 +96,8 @@ foreach (var entity in doc.Entities)
 
 The JSON export is `DwgJsonExporter` in the `DwgIO.Json` namespace. See [Getting started](docs/getting-started.md) and [Public API](docs/public-api.md) for the supported types.
 
+The documentation site with the API reference is at <https://ioextend.github.io/DwgIO/>.
+
 ## Status
 
 | Area | Status |
