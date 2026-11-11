@@ -76,7 +76,8 @@ public class InputHardeningTests
     public void ReadSection_SizeBeyondArrayLimit_Throws()
     {
         var (file, pages) = BuildFile(Page(HelloLz77));
-        var entry = Section(size: 3UL << 30, maxPageSize: uint.MaxValue, (1, 0));
+        // 12 pages of the 256 MiB page limit cover the size, so only the array limit rejects it.
+        var entry = Section(size: 3UL << 30, maxPageSize: uint.MaxValue, [.. Enumerable.Repeat<(uint, ulong)>((1, 0), 12)]);
 
         Assert.Throws<DwgException>(() => Container(pages, entry).ReadSection(file, entry));
     }
@@ -107,9 +108,22 @@ public class InputHardeningTests
     {
         var (file, pages) = BuildFile(Page(HelloLz77));
         var entry = Section(size: 12, maxPageSize: 12, (1, 0), (1, 0));
-        var container = Container(pages, entry, maxDecompressedBytes: 20);
+        // 12 for the section buffer and 12 for the first page fit; the repeated page does not.
+        var container = Container(pages, entry, maxDecompressedBytes: 30);
 
         Assert.Throws<DwgException>(() => container.ReadSection(file, entry));
+    }
+
+    [Fact]
+    public void ReadSection_SectionSizeBeyondDocumentBudget_ThrowsBeforeReadingPages()
+    {
+        // The page payload is invalid, so reaching it would fail differently.
+        var (file, pages) = BuildFile(Page([0x01, (byte)'A']));
+        var entry = Section(size: 12, maxPageSize: 12, (1, 0));
+        var container = Container(pages, entry, maxDecompressedBytes: 10);
+
+        var ex = Assert.Throws<DwgException>(() => container.ReadSection(file, entry));
+        Assert.Contains("in total", ex.Message, StringComparison.Ordinal);
     }
 
     [Theory]
