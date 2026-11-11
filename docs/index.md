@@ -19,6 +19,6 @@ The library targets .NET 8 and .NET 10, uses managed code only, and supports Win
 - [Getting started](getting-started.md): install the tool or the package and read a first drawing.
 - [Public API](public-api.md): the supported surface of the library.
 - [API reference](api/DwgIO.yml): every public type, generated from the XML documentation.
-- [Source on GitHub](https://github.com/IOExtend/DwgIO).
+- [Source on GitHub](https://github.com/IOExtend/DwgIO) and [DeepWiki](https://deepwiki.com/IOExtend/DwgIO) for an automatically generated overview of the repository.
 
 DwgIO is not affiliated with, endorsed by or sponsored by Autodesk. Autodesk and AutoCAD are trademarks of Autodesk, Inc.
