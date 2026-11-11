@@ -87,10 +87,9 @@ Write commit messages in the imperative mood, for example,
 
 Push a tag matching the package version, such as `v0.4.0`, to run `release.yml`.
 The workflow checks that the tag matches the version, builds and tests the solution, and attaches the
-binary archives, NuGet packages, symbols, a source archive and checksums to a GitHub release. The release notes
-are the section of `CHANGELOG.md` for the version, so add that section before the tag.
-
-Publishing to NuGet is not enabled yet: the NuGet steps in `release.yml` are disabled.
+binary archives, NuGet packages, symbols, a source archive and checksums to a GitHub release, then publishes the
+NuGet packages to nuget.org through trusted publishing. The release notes are the section of `CHANGELOG.md` for the
+version, so add that section before the tag.
 
 ## Licensing contributions
 

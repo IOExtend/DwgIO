@@ -15,9 +15,7 @@ DwgIO is a .NET library and command line tool that reads Autodesk AutoCAD drawin
 
 ## Install
 
-Publishing to nuget.org is not enabled yet. Until it is, build from source (see below); tagged releases attach the packages and binary archives to the GitHub release.
-
-Once the packages are published, install the command line tool:
+Install the command line tool:
 
 ```sh
 dotnet tool install --global DwgIO.Cli

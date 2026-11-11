@@ -6,7 +6,7 @@ title: Getting started
 
 ## Install
 
-Publishing to nuget.org is not enabled yet. Until it is, build from source or take the packages attached to a tagged GitHub release. Once the packages are published:
+The packages are published on nuget.org and attached to each tagged GitHub release:
 
 ```sh
 dotnet tool install --global DwgIO.Cli
