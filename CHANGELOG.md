@@ -6,6 +6,11 @@ API between minor releases.
 
 ## [Unreleased]
 
+### Fixed
+- Packed 16-bit and 32-bit integers in their full-width form are read little-endian. They were read with their bytes
+  reversed, so entity records that store a colour, extended data size or reactor count in that form were decoded from
+  the wrong bit position and failed or gave NaN or absurd coordinates (#7).
+
 ## [0.4.0] - 2026-11-11
 
 ### Added

@@ -25,6 +25,52 @@ public class BitReaderTests
     }
 
     [Fact]
+    public void ReadPackedShort_FullWidth_IsLittleEndian()
+    {
+        // 6 padding bits, then tag 00 and the bytes 0x34 0x12.
+        var reader = new BitReaderMsb([0x00, 0x34, 0x12]);
+        reader.ReadBits(6);
+        Assert.Equal(0x1234u, reader.ReadPackedShort());
+    }
+
+    [Fact]
+    public void ReadPackedInt_FullWidth_IsLittleEndian()
+    {
+        var reader = new BitReaderMsb([0x00, 0x78, 0x56, 0x34, 0x12]);
+        reader.ReadBits(6);
+        Assert.Equal(0x12345678u, reader.ReadPackedInt());
+    }
+
+    [Fact]
+    public void ReadPackedShort_FullWidth_Unaligned()
+    {
+        var reader = new BitReaderMsb([0x0D, 0x04, 0x80]);
+        Assert.Equal(0x1234u, reader.ReadPackedShort());
+    }
+
+    [Fact]
+    public void ReadPackedShortAndInt_ShortForms_AreUnchanged()
+    {
+        // Tags 01 (one byte 0xAB), 10 and 11.
+        var shorts = new BitReaderMsb([0x6A, 0xEC]);
+        Assert.Equal(0xABu, shorts.ReadPackedShort());
+        Assert.Equal(0u, shorts.ReadPackedShort());
+        Assert.Equal(256u, shorts.ReadPackedShort());
+
+        var ints = new BitReaderMsb([0x6A, 0xEC]);
+        Assert.Equal(0xABu, ints.ReadPackedInt());
+        Assert.Equal(0u, ints.ReadPackedInt());
+        Assert.Equal(0u, ints.ReadPackedInt());
+    }
+
+    [Fact]
+    public void ReadObjectType_BeforeR2010_FullWidthIsLittleEndian()
+    {
+        var reader = new BitReaderMsb([0x3D, 0x00, 0x40]);
+        Assert.Equal(0x1F4, reader.ReadObjectType(r2010Plus: false));
+    }
+
+    [Fact]
     public void ReadVarUInt_MultiByteContinuation()
     {
         // 0x80 | 0x01 then 0x02: value = 1 | 2 << 7 = 0x101.
