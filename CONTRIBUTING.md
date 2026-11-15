@@ -21,12 +21,22 @@ the Security tab. Do not open public issues for security vulnerabilities.
 Open an issue first for larger changes so the scope and approach can be
 discussed before implementation. Keep changes focused on the agreed problem.
 
-## Original work only
+## Clean-room rule
 
 Contributions must be your own original work. Do not copy code or text from
 other DWG implementations or other projects. Describe format
 facts as they are observed in DWG files, in your own words, in code comments,
 documentation and commit messages.
+
+Do not add vendor code, SDKs, SDK internals, headers or binaries, decompiled or
+leaked source, or anything taken from analysing vendor binaries. Do not add DWG
+or DXF drawings, customer data, or names, paths, sizes or other details of
+private sample drawings to the repository, including tests, comments and
+documentation. Test inputs are built synthetically in the tests; tests that
+need private drawings read them from the folder named by `DWGIO_TEST_FILES` and
+are skipped when it is not set.
+
+Do not put personal data in code, documentation, test data or commit metadata. Use your GitHub noreply address as the commit email.
 
 ## Development setup
 
