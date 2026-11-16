@@ -35,7 +35,7 @@ public sealed class DwgDocument
             {
                 AppInfo = TryReadMetadata("AcDb:AppInfo", b => AppInfoParser.Parse(b, fileHeader.Codepage));
                 FileDepList = TryReadMetadata("AcDb:FileDepList", b => FileDepListParser.Parse(b, fileHeader.Codepage));
-                Preview = TryReadMetadata("AcDb:Preview", PreviewParser.Parse);
+                Preview = ReadOptionalPreview();
             }
 
             if (options.ReadObjects)
@@ -254,6 +254,27 @@ public sealed class DwgDocument
         }
 
         return entities;
+    }
+
+    private DwgPreview? ReadOptionalPreview()
+    {
+        var entry = _container!.SectionMap.FindByName("AcDb:Preview");
+        if (entry is null || entry.Encryption == 1)
+        {
+            return null;
+        }
+
+        try
+        {
+            var pageLayout = new List<SectionPageLayout>();
+            var bytes = _container.ReadSection(_fileBytes, entry, _verifyChecksums, _diagnostics.Add, pageLayout);
+            return PreviewParser.Parse(bytes, pageLayout);
+        }
+        catch (Exception ex) when (IsParseFailure(ex))
+        {
+            _diagnostics.Add($"AcDb:Preview: {ex.Message}");
+            return null;
+        }
     }
 
     private T? TryReadMetadata<T>(string sectionName, Func<byte[], T> parse)

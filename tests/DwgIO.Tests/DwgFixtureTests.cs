@@ -140,9 +140,8 @@ public class DwgFixtureTests
 
         Assert.True(doc.Preview is not null, $"AcDb:Preview present but not parsed; diagnostics: {Diagnostics(doc)}");
 
-        // AC1032 files carry PNG previews that extract cleanly; older writers may store
-        // a body whose declared size overruns the section (a blank/FF thumbnail), and
-        // those legitimately extract to nothing.
+        // A preview section may still lack a usable image when its directory is absent,
+        // points outside the section, or does not describe a recognised image format.
         if (doc.Preview.ImageKind != DwgPreviewImageKind.None)
         {
             Assert.True(doc.Preview.HasImage, $"preview kind {doc.Preview.ImageKind} but no bytes");
