@@ -47,7 +47,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"unexpected error: {ex}");
+            Console.Error.WriteLine($"unexpected error: {ex.Message}");
             return ExitParseError;
         }
     }

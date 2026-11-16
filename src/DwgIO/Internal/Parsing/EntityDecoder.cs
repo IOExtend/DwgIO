@@ -10,6 +10,8 @@ namespace DwgIO.Internal.Parsing;
 /// </summary>
 internal static class EntityDecoder
 {
+    private const ushort DictionaryTypeCode = 0x2A;
+
     /// <summary>Well-known DWG type codes (subset covering the common ones).</summary>
     private static readonly Dictionary<ushort, string> TypeNames = new()
     {
@@ -34,7 +36,7 @@ internal static class EntityDecoder
         [0x26] = "3DSOLID",
         [0x28] = "RAY",
         [0x29] = "XLINE",
-        [0x2A] = "DICTIONARY",
+        [DictionaryTypeCode] = "DICTIONARY",
         [0x2C] = "MTEXT",
         [0x2D] = "LEADER",
         [0x31] = "BLOCK_RECORD",
@@ -52,8 +54,12 @@ internal static class EntityDecoder
     public static string TypeName(ushort typeCode) =>
         TypeNames.TryGetValue(typeCode, out var name) ? name : $"Object_{typeCode:X}";
 
-    /// <summary>Entities are the drawable codes 0x01..0x2F; higher codes are dictionary/table objects.</summary>
-    public static bool IsEntityCode(ushort typeCode) => typeCode is >= 0x01 and <= 0x2F;
+    /// <summary>
+    /// Entities are the drawable fixed codes 0x01..0x2F. DICTIONARY (0x2A) shares that range but is a
+    /// non-graphical object; codes above 0x2F are table, dictionary and control objects.
+    /// </summary>
+    public static bool IsEntityCode(ushort typeCode) =>
+        typeCode is >= 0x01 and <= 0x2F and not DictionaryTypeCode;
 
     /// <summary>
     /// Decodes an entity from the record payload (starting right after the size prefix).

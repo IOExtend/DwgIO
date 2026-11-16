@@ -19,6 +19,13 @@ internal readonly record struct SectionPageLayout(
 /// </summary>
 internal sealed class R2004Container
 {
+    /// <summary>
+    /// Some writers declare a section a few bytes larger than its pages can hold.
+    /// Accept that much overshoot, zero-fill the uncovered tail and report it, while
+    /// still rejecting a declared size far beyond the page budget before allocating.
+    /// </summary>
+    private const ulong MaxSizeOvershoot = 0x100;
+
     private long _decompressedBytes;
 
     /// <summary>Ceiling on section buffers allocated plus page bytes produced by all section reads of one document.</summary>
@@ -59,6 +66,8 @@ internal sealed class R2004Container
     /// Assembles one named section's decompressed bytes from its pages.
     /// Pages starting past the section end are zero pages and skipped;
     /// gaps between page start offsets are filled with zeroes.
+    /// A declared size up to <see cref="MaxSizeOvershoot"/> bytes beyond what the pages
+    /// can hold is zero-filled and reported through <paramref name="reportDiagnostic"/>.
     /// When <paramref name="verifyChecksums"/> is set, a page checksum mismatch throws.
     /// When <paramref name="pageLayout"/> is passed, it receives each page's section and file placement.
     /// </summary>
@@ -66,6 +75,7 @@ internal sealed class R2004Container
         byte[] fileBytes,
         SectionEntry entry,
         bool verifyChecksums = false,
+        Action<string>? reportDiagnostic = null,
         List<SectionPageLayout>? pageLayout = null)
     {
         if (entry.Encryption == 1)
@@ -80,11 +90,19 @@ internal sealed class R2004Container
         };
 
         // The size comes from the file: check it before allocating the result.
-        if (entry.Size > (ulong)Array.MaxLength || entry.Size > (ulong)entry.PageCount * (ulong)pageLimits.MaxOutputBytes)
+        ulong pageBudget = (ulong)entry.PageCount * (ulong)pageLimits.MaxOutputBytes;
+        if (entry.Size > (ulong)Array.MaxLength || entry.Size > pageBudget + MaxSizeOvershoot)
         {
             throw new DwgException(
                 $"Section '{entry.Name}' declares {entry.Size} bytes, more than {entry.PageCount} pages of up to {pageLimits.MaxOutputBytes} bytes " +
                 "or a single buffer can hold.");
+        }
+
+        if (entry.Size > pageBudget)
+        {
+            reportDiagnostic?.Invoke(
+                $"{entry.Name}: declared size {entry.Size} exceeds the {pageBudget} bytes covered by {entry.PageCount} pages " +
+                $"by {entry.Size - pageBudget}; the uncovered tail is zero-filled.");
         }
 
         int totalSize = (int)entry.Size;

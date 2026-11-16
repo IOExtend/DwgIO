@@ -92,6 +92,21 @@ public sealed class DwgDocument
     /// <summary>Best-effort parse failures collected while opening (section name → message).</summary>
     public IReadOnlyList<string> Diagnostics { get; } = [];
 
+    /// <summary>Creates an in-memory document over a file header and a fixed entity list (tests).</summary>
+    internal DwgDocument(string path, DwgFileHeader fileHeader, IReadOnlyList<DwgEntity> entities)
+    {
+        Path = path;
+        _fileBytes = [];
+        FileHeader = fileHeader;
+        Version = fileHeader.Version;
+        Sections = [];
+        Diagnostics = _diagnostics;
+        Entities = entities;
+    }
+
+    /// <summary>Records a non-fatal problem found after the document was opened (e.g. by an exporter).</summary>
+    internal void ReportDiagnostic(string message) => _diagnostics.Add(message);
+
     /// <summary>Opens and parses a DWG file.</summary>
     /// <exception cref="FileNotFoundException">The file does not exist.</exception>
     /// <exception cref="DwgUnsupportedVersionException">The file's container is not implemented yet
@@ -144,7 +159,7 @@ public sealed class DwgDocument
             ?? throw new DwgException($"Section '{name}' not found. Available: {string.Join(", ", container.SectionMap.Sections.Select(s => s.Name))}");
         try
         {
-            return container.ReadSection(_fileBytes, entry, _verifyChecksums);
+            return container.ReadSection(_fileBytes, entry, _verifyChecksums, _diagnostics.Add);
         }
         catch (Exception ex) when (ex is not DwgException && IsParseFailure(ex))
         {
@@ -252,7 +267,7 @@ public sealed class DwgDocument
         try
         {
             var pageLayout = new List<SectionPageLayout>();
-            var bytes = _container.ReadSection(_fileBytes, entry, _verifyChecksums, pageLayout);
+            var bytes = _container.ReadSection(_fileBytes, entry, _verifyChecksums, _diagnostics.Add, pageLayout);
             return PreviewParser.Parse(bytes, pageLayout);
         }
         catch (Exception ex) when (IsParseFailure(ex))
@@ -290,7 +305,7 @@ public sealed class DwgDocument
     }
 
     private byte[] ReadSectionCore(SectionEntry entry) =>
-        _container!.ReadSection(_fileBytes, entry, _verifyChecksums);
+        _container!.ReadSection(_fileBytes, entry, _verifyChecksums, _diagnostics.Add);
 
     private static DwgSectionInfo ToSectionInfo(SectionEntry entry) => new()
     {
