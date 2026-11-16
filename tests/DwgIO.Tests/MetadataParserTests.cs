@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using DwgIO.Internal.Parsing;
 using DwgIO.Model;
 using Xunit;
@@ -6,6 +7,10 @@ namespace DwgIO.Tests;
 
 public class MetadataParserTests
 {
+    private const string VersionEntryId = "1BD848F3CC0A3E4DBAB1CF81F7B450B3";
+    private const string CommentEntryId = "B8D0F025A1D79349B2FA9BF9286FA1FD";
+    private const string ProductXmlEntryId = "E8E09651C5CEB244A8BFF6E83B859D44";
+
     private static void WriteUnicodeString(List<byte> list, string text)
     {
         // AC1021+ layout: u16 char count + count×2 bytes, where the counted content
@@ -30,6 +35,97 @@ public class MetadataParserTests
         list.AddRange(bytes);
     }
 
+    private static void WriteU32(List<byte> data, uint value)
+    {
+        Span<byte> buffer = stackalloc byte[4];
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer, value);
+        data.AddRange(buffer.ToArray());
+    }
+
+    private static void WriteAppInfoEntry(List<byte> data, string id, string text)
+    {
+        data.AddRange(Convert.FromHexString(id));
+        WriteUnicodeString(data, text);
+    }
+
+    private static byte[] BuildUnicodeAppInfo(string name, params (string Id, string Text)[] entries)
+    {
+        var data = new List<byte>();
+        data.AddRange([0x03, 0x00, 0x00, 0x00]); // variant marker
+        WriteUnicodeString(data, name);
+        WriteU32(data, (uint)entries.Length);
+        foreach (var entry in entries)
+        {
+            WriteAppInfoEntry(data, entry.Id, entry.Text);
+        }
+
+        data.AddRange(new byte[8]); // trailing reserve
+        return [.. data];
+    }
+
+    [Fact]
+    public void AppInfo_SingleCommentEntry_Parses()
+    {
+        var data = BuildUnicodeAppInfo(
+            "AppInfoDataList",
+            (CommentEntryId, "Autodesk DWG. Trusted DWG notice."));
+
+        var appInfo = AppInfoParser.Parse(data, 1251);
+
+        Assert.Equal("AppInfoDataList", appInfo.Name);
+        Assert.Equal("Autodesk DWG. Trusted DWG notice.", appInfo.Comment);
+        Assert.Equal(string.Empty, appInfo.Version);
+        Assert.Equal(string.Empty, appInfo.ProductXml);
+    }
+
+    [Fact]
+    public void AppInfo_ThreeEntries_MapsEachByIdentifier()
+    {
+        var data = BuildUnicodeAppInfo(
+            "AppInfoDataList",
+            (ProductXmlEntryId, "<ProductInformation build_version=\"Q.163.0.0(x64)\"/>"),
+            (CommentEntryId, "Autodesk DWG. Trusted DWG notice."),
+            (VersionEntryId, "23.1.163.0.0"));
+
+        var appInfo = AppInfoParser.Parse(data, 1251);
+
+        Assert.Equal("AppInfoDataList", appInfo.Name);
+        Assert.Equal("23.1.163.0.0", appInfo.Version);
+        Assert.Equal("Autodesk DWG. Trusted DWG notice.", appInfo.Comment);
+        Assert.Contains("Q.163.0.0", appInfo.ProductXml);
+    }
+
+    [Fact]
+    public void AppInfo_EntryOrderDoesNotMatter()
+    {
+        var data = BuildUnicodeAppInfo(
+            "AppInfoDataList",
+            (ProductXmlEntryId, "<ProductInformation build_version=\"D.40.0.200\"/>"),
+            (VersionEntryId, "18.0.40.0.200"));
+
+        var appInfo = AppInfoParser.Parse(data, 1251);
+
+        // The explicit version entry wins over the XML build_version attribute.
+        Assert.Equal("18.0.40.0.200", appInfo.Version);
+        Assert.Contains("D.40.0.200", appInfo.ProductXml);
+        Assert.Equal(string.Empty, appInfo.Comment);
+    }
+
+    [Fact]
+    public void AppInfo_UnknownEntry_IsSkipped()
+    {
+        var data = BuildUnicodeAppInfo(
+            "AppInfoDataList",
+            ("000102030405060708090A0B0C0D0E0F", "ignored"),
+            (CommentEntryId, "notice"));
+
+        var appInfo = AppInfoParser.Parse(data, 1251);
+
+        Assert.Equal("notice", appInfo.Comment);
+        Assert.Equal(string.Empty, appInfo.Version);
+        Assert.Equal(string.Empty, appInfo.ProductXml);
+    }
+
     [Fact]
     public void AppInfo_UnicodeLayout_ParsesVersionFromXml()
     {
@@ -37,10 +133,11 @@ public class MetadataParserTests
         data.AddRange([0x02, 0x00, 0x00, 0x00]); // variant marker
         WriteUnicodeString(data, "AppInfoDataList");
         data.AddRange([0x02, 0x00, 0x00, 0x00]);
-        data.AddRange(new byte[16]); // checksum
-        WriteUnicodeString(data, "Autodesk DWG. Trusted DWG notice.");
-        data.AddRange(new byte[16]); // checksum
-        WriteUnicodeString(data, "<ProductInformation name=\"Writer\" build_version=\"1.2.3.4\"/>");
+        WriteAppInfoEntry(data, CommentEntryId, "Autodesk DWG. Trusted DWG notice.");
+        WriteAppInfoEntry(
+            data,
+            ProductXmlEntryId,
+            "<ProductInformation name=\"Writer\" build_version=\"1.2.3.4\"/>");
         data.AddRange(new byte[8]); // trailing reserve
 
         var appInfo = AppInfoParser.Parse([.. data], 1251);
