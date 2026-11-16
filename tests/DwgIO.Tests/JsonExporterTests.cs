@@ -92,8 +92,10 @@ public class JsonExporterTests
         }
     }
 
-    [Fact]
-    public void WriteFile_Overwrite_PreservesExistingAccessRules()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WriteFile_Overwrite_PreservesExistingAccessRules(bool denyAclChanges)
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -114,12 +116,27 @@ public class JsonExporterTests
                 System.Security.Principal.WindowsIdentity.GetCurrent().User!,
                 System.Security.AccessControl.FileSystemRights.FullControl,
                 System.Security.AccessControl.AccessControlType.Allow));
+            if (denyAclChanges)
+            {
+                acl.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(
+                    System.Security.Principal.WindowsIdentity.GetCurrent().User!,
+                    System.Security.AccessControl.FileSystemRights.ChangePermissions,
+                    System.Security.AccessControl.AccessControlType.Deny));
+                // OWNER RIGHTS suppresses the owner's implicit permission to change the ACL.
+                acl.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(
+                    new System.Security.Principal.SecurityIdentifier("S-1-3-4"),
+                    System.Security.AccessControl.FileSystemRights.ReadPermissions,
+                    System.Security.AccessControl.AccessControlType.Allow));
+            }
+
             new FileInfo(target).SetAccessControl(acl);
-            Assert.True(new FileInfo(target).GetAccessControl().AreAccessRulesProtected);
+            var expectedAcl = new FileInfo(target).GetAccessControl().GetSecurityDescriptorSddlForm(
+                System.Security.AccessControl.AccessControlSections.Access);
 
             DwgJsonExporter.WriteFile(document, target, DwgJsonExportOptions.Default);
 
-            Assert.True(new FileInfo(target).GetAccessControl().AreAccessRulesProtected);
+            Assert.Equal(expectedAcl, new FileInfo(target).GetAccessControl().GetSecurityDescriptorSddlForm(
+                System.Security.AccessControl.AccessControlSections.Access));
             Assert.Empty(Directory.GetFiles(directory, "*.tmp"));
             using var json = JsonDocument.Parse(File.ReadAllBytes(target));
             Assert.Equal(1, json.RootElement.GetProperty("entityCount").GetInt32());

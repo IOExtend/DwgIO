@@ -218,7 +218,7 @@ public static class DwgJsonExporter
         // Preserve the destination's access rights across the atomic replace: a fresh
         // temporary file inherits the directory ACL, which may be more permissive than
         // the file being overwritten. Copy the existing rights onto the temporary file
-        // before any JSON bytes are written, then re-apply them after the move.
+        // before any JSON bytes are written; the same-directory move preserves them.
         // Reading or applying the rights is mandatory: failures abort the export
         // before the destination is touched, instead of silently widening access.
         FileSecurity? savedWindowsAcl = null;
@@ -266,11 +266,6 @@ public static class DwgJsonExporter
             }
 
             File.Move(tempPath, fullPath, overwrite: true);
-
-            // File.Move within a directory keeps the source (temporary) file's rights,
-            // which already mirror the destination. Re-apply in case the platform
-            // re-inherited rights on replace; a failure here is reported, not hidden.
-            ApplyTempSecurity(fullPath, savedWindowsAcl, savedUnixMode, destinationExists);
         }
         catch
         {
