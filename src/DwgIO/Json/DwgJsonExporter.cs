@@ -143,12 +143,26 @@ public static class DwgJsonExporter
             if (entity.Geometry is { } geometry)
             {
                 writer.WriteStartArray("geometry");
+                int nonFiniteValues = 0;
                 foreach (var value in geometry)
                 {
-                    writer.WriteNumberValue(Math.Round(value, 6));
+                    if (double.IsFinite(value))
+                    {
+                        writer.WriteNumberValue(Math.Round(value, 6));
+                    }
+                    else
+                    {
+                        writer.WriteNullValue();
+                        nonFiniteValues++;
+                    }
                 }
 
                 writer.WriteEndArray();
+                if (nonFiniteValues > 0)
+                {
+                    document.ReportDiagnostic(
+                        $"entity {entity.Handle:X}: {nonFiniteValues} non-finite geometry value(s) written as null");
+                }
             }
 
             if (entity.ColorIndex != 0)
@@ -196,8 +210,39 @@ public static class DwgJsonExporter
     /// <summary>Writes <paramref name="document"/> as JSON to a new file at <paramref name="path"/>.</summary>
     public static void WriteFile(DwgDocument document, string path, DwgJsonExportOptions options)
     {
-        using var stream = File.Create(path);
-        Write(document, stream, options);
+        var fullPath = Path.GetFullPath(path);
+        var directory = Path.GetDirectoryName(fullPath) ?? Directory.GetCurrentDirectory();
+        var tempPath = Path.Combine(directory, $".dwgio-{Guid.NewGuid():N}.tmp");
+        try
+        {
+            using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                Write(document, stream, options);
+            }
+
+            File.Move(tempPath, fullPath, overwrite: true);
+        }
+        catch
+        {
+            TryDelete(tempPath);
+            throw;
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (IOException)
+        {
+            // Best-effort cleanup: the original export failure is the error worth reporting.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Best-effort cleanup: the original export failure is the error worth reporting.
+        }
     }
 
     private static bool IsIncluded(DwgDocument document, string name, DwgJsonExportOptions options) =>

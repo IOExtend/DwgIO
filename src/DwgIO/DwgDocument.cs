@@ -92,6 +92,21 @@ public sealed class DwgDocument
     /// <summary>Best-effort parse failures collected while opening (section name → message).</summary>
     public IReadOnlyList<string> Diagnostics { get; } = [];
 
+    /// <summary>Creates an in-memory document over a file header and a fixed entity list (tests).</summary>
+    internal DwgDocument(string path, DwgFileHeader fileHeader, IReadOnlyList<DwgEntity> entities)
+    {
+        Path = path;
+        _fileBytes = [];
+        FileHeader = fileHeader;
+        Version = fileHeader.Version;
+        Sections = [];
+        Diagnostics = _diagnostics;
+        Entities = entities;
+    }
+
+    /// <summary>Records a non-fatal problem found after the document was opened (e.g. by an exporter).</summary>
+    internal void ReportDiagnostic(string message) => _diagnostics.Add(message);
+
     /// <summary>Opens and parses a DWG file.</summary>
     /// <exception cref="FileNotFoundException">The file does not exist.</exception>
     /// <exception cref="DwgUnsupportedVersionException">The file's container is not implemented yet
