@@ -57,6 +57,27 @@ public class PreviewParserRegressionTests
     }
 
     [Fact]
+    public void AlphaBitfields_FourMasks_AreBeforePixels()
+    {
+        var dib = new byte[60];
+        BinaryPrimitives.WriteUInt32LittleEndian(dib, 40);
+        BinaryPrimitives.WriteInt32LittleEndian(dib.AsSpan(4), 1);
+        BinaryPrimitives.WriteInt32LittleEndian(dib.AsSpan(8), 1);
+        BinaryPrimitives.WriteUInt16LittleEndian(dib.AsSpan(12), 1);
+        BinaryPrimitives.WriteUInt16LittleEndian(dib.AsSpan(14), 32);
+        BinaryPrimitives.WriteUInt32LittleEndian(dib.AsSpan(16), 6);
+        BinaryPrimitives.WriteUInt32LittleEndian(dib.AsSpan(20), 4);
+        BinaryPrimitives.WriteUInt32LittleEndian(dib.AsSpan(40), 0x00FF0000);
+        BinaryPrimitives.WriteUInt32LittleEndian(dib.AsSpan(44), 0x0000FF00);
+        BinaryPrimitives.WriteUInt32LittleEndian(dib.AsSpan(48), 0x000000FF);
+        BinaryPrimitives.WriteUInt32LittleEndian(dib.AsSpan(52), 0xFF000000);
+        BinaryPrimitives.WriteUInt32LittleEndian(dib.AsSpan(56), 0xFFFF0000);
+        var preview = PreviewParser.Parse(Preview(2, 64, dib));
+        Assert.Equal(DwgPreviewImageKind.Bmp, preview.ImageKind);
+        Assert.Equal(70u, BinaryPrimitives.ReadUInt32LittleEndian(preview.ImageBytes.AsSpan(10)));
+    }
+
+    [Fact]
     public void AbsoluteDib_SpanningTwoPages_PreservesImage()
     {
         var data = Preview(2, 1064, BitfieldsDib());

@@ -199,12 +199,19 @@ internal static class PreviewParser
         ushort bitsPerPixel = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(14));
         uint coloursUsed = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(32));
         long entries = coloursUsed != 0 ? coloursUsed : bitsPerPixel <= 8 ? 1u << bitsPerPixel : 0;
-        // With BI_BITFIELDS (3) or BI_ALPHABITFIELDS (6) three DWORD colour masks
+        // With BI_BITFIELDS (3) three DWORD colour masks, and with
+        // BI_ALPHABITFIELDS (6) four DWORD masks (red, green, blue, alpha),
         // follow the 40-byte BITMAPINFOHEADER before the palette.
         uint compression = headerSize >= 20 && bytes.Length >= 20
             ? BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(16))
             : 0;
-        int maskCount = headerSize == 40 && (compression == 3 || compression == 6) ? 3 : 0;
+        int maskCount = headerSize == 40 ? compression switch
+        {
+            3 => 3,
+            6 => 4,
+            _ => 0,
+        }
+        : 0;
         long headerOffset = 14 + headerSize + maskCount * 4L + entries * 4L;
         if (headerOffset > 14 + bytes.Length)
         {
