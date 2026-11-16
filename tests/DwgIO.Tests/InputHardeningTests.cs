@@ -64,10 +64,25 @@ public class InputHardeningTests
     }
 
     [Fact]
-    public void ReadSection_SizeBeyondPageCapacity_Throws()
+    public void ReadSection_SmallSizeOvershoot_ZeroFillsTailAndReports()
     {
         var (file, pages) = BuildFile(Page(HelloLz77));
-        var entry = Section(size: 0x7401, maxPageSize: 0x7400, (1, 0));
+        var entry = Section(size: 15, maxPageSize: 12, (1, 0));
+        var diagnostics = new List<string>();
+
+        var bytes = Container(pages, entry).ReadSection(file, entry, reportDiagnostic: diagnostics.Add);
+
+        Assert.Equal(15, bytes.Length);
+        Assert.Equal("Hello World!", Encoding.ASCII.GetString(bytes, 0, 12));
+        Assert.All(bytes[12..], b => Assert.Equal(0, b));
+        Assert.Contains("zero-filled", Assert.Single(diagnostics), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReadSection_SizeFarBeyondPageCapacity_Throws()
+    {
+        var (file, pages) = BuildFile(Page(HelloLz77));
+        var entry = Section(size: 0x7400 + 0x101, maxPageSize: 0x7400, (1, 0));
 
         Assert.Throws<DwgException>(() => Container(pages, entry).ReadSection(file, entry));
     }

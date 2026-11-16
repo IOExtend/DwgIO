@@ -144,7 +144,7 @@ public sealed class DwgDocument
             ?? throw new DwgException($"Section '{name}' not found. Available: {string.Join(", ", container.SectionMap.Sections.Select(s => s.Name))}");
         try
         {
-            return container.ReadSection(_fileBytes, entry, _verifyChecksums);
+            return container.ReadSection(_fileBytes, entry, _verifyChecksums, _diagnostics.Add);
         }
         catch (Exception ex) when (ex is not DwgException && IsParseFailure(ex))
         {
@@ -269,7 +269,7 @@ public sealed class DwgDocument
     }
 
     private byte[] ReadSectionCore(SectionEntry entry) =>
-        _container!.ReadSection(_fileBytes, entry, _verifyChecksums);
+        _container!.ReadSection(_fileBytes, entry, _verifyChecksums, _diagnostics.Add);
 
     private static DwgSectionInfo ToSectionInfo(SectionEntry entry) => new()
     {
