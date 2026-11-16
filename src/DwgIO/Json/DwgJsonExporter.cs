@@ -219,41 +219,35 @@ public static class DwgJsonExporter
         // temporary file inherits the directory ACL, which may be more permissive than
         // the file being overwritten. Copy the existing rights onto the temporary file
         // before any JSON bytes are written, then re-apply them after the move.
+        // Reading or applying the rights is mandatory: failures abort the export
+        // before the destination is touched, instead of silently widening access.
         FileSecurity? savedWindowsAcl = null;
         UnixFileMode? savedUnixMode = null;
-        bool haveExistingFile = false;
-        try
+        bool destinationExists = File.Exists(fullPath);
+        if (destinationExists)
         {
-            haveExistingFile = File.Exists(fullPath);
-            if (haveExistingFile)
+            if (OperatingSystem.IsWindows())
             {
-                if (OperatingSystem.IsWindows())
+                try
                 {
-                    try
-                    {
-                        savedWindowsAcl = new FileInfo(fullPath).GetAccessControl();
-                    }
-                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException or InvalidOperationException)
-                    {
-                        savedWindowsAcl = null;
-                    }
+                    savedWindowsAcl = new FileInfo(fullPath).GetAccessControl();
                 }
-                else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+                catch (PlatformNotSupportedException)
                 {
-                    try
-                    {
-                        savedUnixMode = File.GetUnixFileMode(fullPath);
-                    }
-                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
-                    {
-                        savedUnixMode = null;
-                    }
+                    savedWindowsAcl = null;
                 }
             }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            haveExistingFile = false;
+            else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+            {
+                try
+                {
+                    savedUnixMode = File.GetUnixFileMode(fullPath);
+                }
+                catch (PlatformNotSupportedException)
+                {
+                    savedUnixMode = null;
+                }
+            }
         }
 
         try
@@ -264,7 +258,7 @@ public static class DwgJsonExporter
             {
             }
 
-            ApplyTempSecurity(tempPath, savedWindowsAcl, savedUnixMode);
+            ApplyTempSecurity(tempPath, savedWindowsAcl, savedUnixMode, destinationExists);
 
             using (var stream = new FileStream(tempPath, FileMode.Truncate, FileAccess.Write, FileShare.None))
             {
@@ -274,9 +268,9 @@ public static class DwgJsonExporter
             File.Move(tempPath, fullPath, overwrite: true);
 
             // File.Move within a directory keeps the source (temporary) file's rights,
-            // which already mirror the destination. Re-apply best-effort in case the
-            // platform re-inherited rights on replace.
-            ApplyTempSecurity(fullPath, savedWindowsAcl, savedUnixMode);
+            // which already mirror the destination. Re-apply in case the platform
+            // re-inherited rights on replace; a failure here is reported, not hidden.
+            ApplyTempSecurity(fullPath, savedWindowsAcl, savedUnixMode, destinationExists);
         }
         catch
         {
@@ -288,32 +282,34 @@ public static class DwgJsonExporter
     private static void ApplyTempSecurity(
         string filePath,
         FileSecurity? windowsAcl,
-        UnixFileMode? unixMode)
+        UnixFileMode? unixMode,
+        bool destinationExists)
     {
-        if (windowsAcl is not null && OperatingSystem.IsWindows())
+        if (!destinationExists)
         {
-            try
-            {
-                // Copy only the DACL and its protection flag. Persisting the whole
-                // FileSecurity (owner/group/SACL) requires SeSecurityPrivilege and,
-                // when unmodified, persists nothing — the temporary file would keep
-                // the directory's inherited rules.
-                new FileInfo(filePath).SetAccessControl(CloneDacl(windowsAcl));
-                return;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException or InvalidOperationException or System.Security.AccessControl.PrivilegeNotHeldException)
-            {
-            }
+            return;
         }
 
-        if (unixMode.HasValue && (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS()))
+        if (OperatingSystem.IsWindows())
         {
-            try
+            if (windowsAcl is null)
+            {
+                return;
+            }
+
+            // Copy only the DACL and its protection flag. Persisting the whole
+            // FileSecurity (owner/group/SACL) requires SeSecurityPrivilege and,
+            // when unmodified, persists nothing — the temporary file would keep
+            // the directory's inherited rules.
+            new FileInfo(filePath).SetAccessControl(CloneDacl(windowsAcl));
+            return;
+        }
+
+        if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+        {
+            if (unixMode.HasValue)
             {
                 File.SetUnixFileMode(filePath, unixMode.Value);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
-            {
             }
         }
     }
