@@ -93,6 +93,44 @@ public class JsonExporterTests
     }
 
     [Fact]
+    public void WriteFile_Overwrite_PreservesExistingAccessRules()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var document = CreateDocument(CreateEntity([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]));
+        var directory = Path.Combine(Path.GetTempPath(), "dwgio-tests-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var target = Path.Combine(directory, "out.json");
+            DwgJsonExporter.WriteFile(document, target, DwgJsonExportOptions.Default);
+
+            var acl = new FileInfo(target).GetAccessControl();
+            acl.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+            acl.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(
+                System.Security.Principal.WindowsIdentity.GetCurrent().User!,
+                System.Security.AccessControl.FileSystemRights.FullControl,
+                System.Security.AccessControl.AccessControlType.Allow));
+            new FileInfo(target).SetAccessControl(acl);
+            Assert.True(new FileInfo(target).GetAccessControl().AreAccessRulesProtected);
+
+            DwgJsonExporter.WriteFile(document, target, DwgJsonExportOptions.Default);
+
+            Assert.True(new FileInfo(target).GetAccessControl().AreAccessRulesProtected);
+            Assert.Empty(Directory.GetFiles(directory, "*.tmp"));
+            using var json = JsonDocument.Parse(File.ReadAllBytes(target));
+            Assert.Equal(1, json.RootElement.GetProperty("entityCount").GetInt32());
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void WriteFile_FailedMove_LeavesNoTargetFileOrTemporaryFile()
     {
         var document = CreateDocument(CreateEntity([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]));
