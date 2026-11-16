@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+using DwgIO.Internal.Container;
 using DwgIO.Internal.Parsing;
 using DwgIO.Model;
 using Xunit;
@@ -106,6 +108,116 @@ public class MetadataParserTests
         Assert.Equal(DwgPreviewImageKind.Png, preview.ImageKind);
         Assert.Equal(pngBytes, preview.ImageBytes);
         Assert.True(preview.HasImage);
+    }
+
+    [Fact]
+    public void Preview_AbsoluteOffset_MapsThroughPageFileOffset()
+    {
+        var png = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0xFF, 0xEE };
+        const long pageFileOffset = 1000;
+        const int position = 100;
+        var data = BuildPreviewSection(
+            [(0x06, (uint)(pageFileOffset + position), (uint)png.Length)],
+            position,
+            png);
+        var layout = new[] { new SectionPageLayout(0, data.Length, pageFileOffset, true) };
+
+        var preview = PreviewParser.Parse(data, layout);
+
+        Assert.Equal(DwgPreviewImageKind.Png, preview.ImageKind);
+        Assert.Equal(png, preview.ImageBytes);
+    }
+
+    [Theory]
+    [InlineData((ushort)8, 1078)]
+    [InlineData((ushort)24, 54)]
+    public void Preview_BareDib_GetsBmpFileHeader(ushort bitCount, int expectedOffBits)
+    {
+        var dib = BuildDib(bitCount);
+        const long pageFileOffset = 2048;
+        const int position = 64;
+        var data = BuildPreviewSection(
+            [(0x02, (uint)(pageFileOffset + position), (uint)dib.Length)],
+            position,
+            dib);
+        var layout = new[] { new SectionPageLayout(0, data.Length, pageFileOffset, true) };
+
+        var preview = PreviewParser.Parse(data, layout);
+
+        Assert.Equal(DwgPreviewImageKind.Bmp, preview.ImageKind);
+        Assert.Equal("BM", System.Text.Encoding.ASCII.GetString(preview.ImageBytes, 0, 2));
+        Assert.Equal(14 + dib.Length, preview.ImageBytes.Length);
+        Assert.Equal((uint)preview.ImageBytes.Length, BinaryPrimitives.ReadUInt32LittleEndian(preview.ImageBytes.AsSpan(2)));
+        Assert.Equal((uint)expectedOffBits, BinaryPrimitives.ReadUInt32LittleEndian(preview.ImageBytes.AsSpan(10)));
+        Assert.Equal(dib, preview.ImageBytes[14..]);
+    }
+
+    [Fact]
+    public void Preview_InvalidImageBytes_ReturnsNoImage()
+    {
+        var junk = Enumerable.Repeat((byte)0x11, 100).ToArray();
+        const long pageFileOffset = 500;
+        const int position = 40;
+        var data = BuildPreviewSection(
+            [(0x02, (uint)(pageFileOffset + position), (uint)junk.Length)],
+            position,
+            junk);
+        var layout = new[] { new SectionPageLayout(0, data.Length, pageFileOffset, true) };
+
+        var preview = PreviewParser.Parse(data, layout);
+
+        Assert.Equal(DwgPreviewImageKind.None, preview.ImageKind);
+        Assert.False(preview.HasImage);
+    }
+
+    private static byte[] BuildPreviewSection(
+        (byte Code, uint Start, uint Size)[] entries,
+        int imageOffset,
+        byte[] image)
+    {
+        var data = new List<byte>();
+        data.AddRange(PreviewParserSentinels.Start);
+        WriteU32(data, (uint)(16 + 4 + 1 + entries.Length * 9 + imageOffset + image.Length));
+        data.Add((byte)entries.Length);
+        foreach (var entry in entries)
+        {
+            data.Add(entry.Code);
+            WriteU32(data, entry.Start);
+            WriteU32(data, entry.Size);
+        }
+
+        while (data.Count < imageOffset)
+        {
+            data.Add(0);
+        }
+
+        data.AddRange(image);
+        data.AddRange(PreviewParserSentinels.End);
+        return [.. data];
+    }
+
+    private static byte[] BuildDib(ushort bitCount)
+    {
+        const int width = 2;
+        const int height = 2;
+        int paletteEntries = bitCount <= 8 ? 1 << bitCount : 0;
+        int stride = (width * bitCount + 31) / 32 * 4;
+        int pixelBytes = stride * height;
+        var dib = new byte[40 + paletteEntries * 4 + pixelBytes];
+        BinaryPrimitives.WriteUInt32LittleEndian(dib.AsSpan(0), 40);
+        BinaryPrimitives.WriteInt32LittleEndian(dib.AsSpan(4), width);
+        BinaryPrimitives.WriteInt32LittleEndian(dib.AsSpan(8), height);
+        BinaryPrimitives.WriteUInt16LittleEndian(dib.AsSpan(12), 1);
+        BinaryPrimitives.WriteUInt16LittleEndian(dib.AsSpan(14), bitCount);
+        BinaryPrimitives.WriteUInt32LittleEndian(dib.AsSpan(20), (uint)pixelBytes);
+        return dib;
+    }
+
+    private static void WriteU32(List<byte> data, uint value)
+    {
+        Span<byte> buffer = stackalloc byte[4];
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer, value);
+        data.AddRange(buffer.ToArray());
     }
 
     private static class PreviewParserSentinels

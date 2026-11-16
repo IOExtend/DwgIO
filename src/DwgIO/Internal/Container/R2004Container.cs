@@ -3,6 +3,17 @@ using DwgIO.Model;
 namespace DwgIO.Internal.Container;
 
 /// <summary>
+/// One decompressed page of a section: where it starts in the section and where its
+/// payload starts in the file. Absolute file offsets stored inside a section only map
+/// linearly back to section positions when the page is stored uncompressed.
+/// </summary>
+internal readonly record struct SectionPageLayout(
+    int SectionOffset,
+    int Length,
+    long FileOffset,
+    bool IsStoredUncompressed);
+
+/// <summary>
 /// The parsed R2004-family container: decrypted file header,
 /// page map and section map. Assembles named sections from their pages.
 /// </summary>
@@ -49,8 +60,13 @@ internal sealed class R2004Container
     /// Pages starting past the section end are zero pages and skipped;
     /// gaps between page start offsets are filled with zeroes.
     /// When <paramref name="verifyChecksums"/> is set, a page checksum mismatch throws.
+    /// When <paramref name="pageLayout"/> is passed, it receives each page's section and file placement.
     /// </summary>
-    public byte[] ReadSection(byte[] fileBytes, SectionEntry entry, bool verifyChecksums = false)
+    public byte[] ReadSection(
+        byte[] fileBytes,
+        SectionEntry entry,
+        bool verifyChecksums = false,
+        List<SectionPageLayout>? pageLayout = null)
     {
         if (entry.Encryption == 1)
         {
@@ -122,6 +138,7 @@ internal sealed class R2004Container
             int start = (int)pageRef.StartOffset;
             int take = Math.Min(decompressed.Length, totalSize - start);
             Buffer.BlockCopy(decompressed, 0, result, start, take);
+            pageLayout?.Add(new SectionPageLayout(start, take, payloadStart, entry.Compression == 1));
         }
 
         return result;
