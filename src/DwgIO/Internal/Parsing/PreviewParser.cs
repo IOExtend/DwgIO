@@ -59,13 +59,28 @@ internal static class PreviewParser
         }
 
         // Prefer the slot each format belongs to, but keep looking when a slot
-        // carries bytes that are not a valid image of that format.
-        var image = FindImage(data, bmp, pages, out var kind)
-            ?? FindImage(data, png, pages, out kind)
-            ?? FindImage(data, wmf, pages, out kind)
-            ?? CarveImageMagic(data);
+        // carries bytes that are not a valid image of that format. Keep the kind
+        // reported by FindImage: re-detecting would drop WMF, which DetectKind
+        // historically did not know.
+        byte[]? image = null;
+        var kind = DwgPreviewImageKind.None;
+        foreach (var slot in new[] { bmp, png, wmf })
+        {
+            var bytes = FindImage(data, slot, pages, out var found);
+            if (bytes is not null)
+            {
+                image = bytes;
+                kind = found;
+                break;
+            }
+        }
 
-        kind = image is null ? DwgPreviewImageKind.None : DetectKind(image);
+        if (image is null)
+        {
+            image = CarveImageMagic(data);
+            kind = image is null ? DwgPreviewImageKind.None : DetectKind(image);
+        }
+
         if (kind == DwgPreviewImageKind.None)
         {
             image = null;
@@ -116,6 +131,7 @@ internal static class PreviewParser
     private static DwgPreviewImageKind DetectKind(byte[] bytes) =>
         IsPng(bytes) ? DwgPreviewImageKind.Png
         : bytes.Length >= 2 && bytes[0] == (byte)'B' && bytes[1] == (byte)'M' ? DwgPreviewImageKind.Bmp
+        : IsWmf(bytes) ? DwgPreviewImageKind.Wmf
         : DwgPreviewImageKind.None;
 
     private static bool IsPng(byte[] bytes) =>
@@ -183,7 +199,13 @@ internal static class PreviewParser
         ushort bitsPerPixel = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(14));
         uint coloursUsed = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(32));
         long entries = coloursUsed != 0 ? coloursUsed : bitsPerPixel <= 8 ? 1u << bitsPerPixel : 0;
-        long headerOffset = 14 + headerSize + entries * 4L;
+        // With BI_BITFIELDS (3) or BI_ALPHABITFIELDS (6) three DWORD colour masks
+        // follow the 40-byte BITMAPINFOHEADER before the palette.
+        uint compression = headerSize >= 20 && bytes.Length >= 20
+            ? BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(16))
+            : 0;
+        int maskCount = headerSize == 40 && (compression == 3 || compression == 6) ? 3 : 0;
+        long headerOffset = 14 + headerSize + maskCount * 4L + entries * 4L;
         if (headerOffset > 14 + bytes.Length)
         {
             return false;
@@ -205,20 +227,68 @@ internal static class PreviewParser
 
         if (pages is not null)
         {
+            // Absolute offsets map through the page holding the image start. The image
+            // may span pages: its bytes are contiguous in the assembled section, with
+            // a file-header gap between page payloads, so verify that the whole
+            // section range is covered by consecutive uncompressed pages.
+            long? sectionStart = null;
             foreach (var page in pages)
             {
-                if (!page.IsStoredUncompressed || r.start < page.FileOffset)
+                if (!page.IsStoredUncompressed)
                 {
                     continue;
                 }
 
-                long relative = r.start - page.FileOffset;
-                if (relative + r.size > page.Length)
+                if ((long)r.start < page.FileOffset)
                 {
                     continue;
                 }
 
-                return Take(data, page.SectionOffset + relative, (int)r.size);
+                long relative = (long)r.start - page.FileOffset;
+                if (relative >= page.Length)
+                {
+                    continue;
+                }
+
+                sectionStart = (long)page.SectionOffset + relative;
+                break;
+            }
+
+            if (sectionStart.HasValue)
+            {
+                long sectionEnd = sectionStart.Value + r.size;
+                long covered = sectionStart.Value;
+                foreach (var page in pages
+                    .Where(p => p.IsStoredUncompressed)
+                    .OrderBy(p => p.SectionOffset))
+                {
+                    long intervalStart = page.SectionOffset;
+                    long intervalEnd = intervalStart + page.Length;
+                    if (intervalEnd <= covered)
+                    {
+                        continue;
+                    }
+
+                    if (intervalStart > covered)
+                    {
+                        break; // gap in the assembled section
+                    }
+
+                    covered = intervalEnd;
+                    if (covered >= sectionEnd)
+                    {
+                        break;
+                    }
+                }
+
+                if (covered >= sectionEnd)
+                {
+                    var spanning = Take(data, sectionStart.Value, (int)r.size);
+                    if (spanning is not null)
+                    {
+                        return spanning;
+                    }
+                }
             }
         }
 
