@@ -85,7 +85,20 @@ Open the drawing in a standalone interactive 3D HTML viewer:
 dwgio drawing.dwg drawing.html
 ```
 
-Errors go to standard error.
+List the decoded entities, one line each, optionally filtered by type and as JSON:
+
+```sh
+dwgio entities drawing.dwg --type LINE,CIRCLE
+dwgio entities drawing.dwg --json
+```
+
+The JSON export also writes to standard output when the target is `-`:
+
+```sh
+dwgio drawing.dwg - | jq .summaryInfo
+```
+
+`dwgio --version` prints the package version, `dwgio --help` the usage. Errors go to standard error.
 
 ### Exit codes
 

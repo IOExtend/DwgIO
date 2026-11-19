@@ -1,5 +1,9 @@
 using System.Globalization;
+using System.Reflection;
+using System.Text;
+using System.Text.Json;
 using DwgIO;
+using DwgIO.Internal.Parsing;
 using DwgIO.Json;
 using DwgIO.Model;
 using DwgIO.Scene;
@@ -23,11 +27,14 @@ internal static class Program
     private const int ExitParseError = 4;
     private const int ExitNoPreview = 5;
 
-    private static int Main(string[] args)
+    private static int Main(string[] args) => Run(args, Console.Out, Console.Error);
+
+    /// <summary>Runs one command. Internal for the CLI tests.</summary>
+    internal static int Run(string[] args, TextWriter output, TextWriter error)
     {
         if (args.Length == 0)
         {
-            PrintUsage();
+            PrintUsage(output);
             return ExitUsage;
         }
 
@@ -35,39 +42,64 @@ internal static class Program
         {
             return args[0] switch
             {
-                "inspect" => Inspect(args),
-                "extract" => Extract(args),
-                "preview" => Preview(args),
-                "scene" => Scene(args),
-                "svg" => Svg(args),
-                _ => Export(args),
+                "--version" or "-v" => PrintVersion(output),
+                "--help" or "-h" => PrintHelp(output),
+                "inspect" => Inspect(args, output, error),
+                "extract" => Extract(args, output, error),
+                "preview" => Preview(args, output, error),
+                "scene" => Scene(args, output, error),
+                "svg" => Svg(args, output, error),
+                "entities" => Entities(args, output, error),
+                string option when option.StartsWith('-') => UnknownOption(option, output, error),
+                _ => Export(args, output, error),
             };
         }
         catch (FileNotFoundException ex)
         {
-            Console.Error.WriteLine($"error: {ex.Message}");
+            error.WriteLine($"error: {ex.Message}");
             return ExitFileNotFound;
         }
         catch (DwgUnsupportedVersionException ex)
         {
-            Console.Error.WriteLine($"error: {ex.Message}");
+            error.WriteLine($"error: {ex.Message}");
             return ExitUnsupportedVersion;
         }
         catch (DwgException ex)
         {
-            Console.Error.WriteLine($"error: {ex.Message}");
+            error.WriteLine($"error: {ex.Message}");
             return ExitParseError;
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"unexpected error: {ex.Message}");
+            error.WriteLine($"unexpected error: {ex.Message}");
             return ExitParseError;
         }
     }
 
-    private static void PrintUsage()
+    private static int PrintVersion(TextWriter output)
     {
-        Console.WriteLine("""
+        string version = typeof(Program).Assembly.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion.Split('+')[0] ?? "unknown";
+        output.WriteLine(version);
+        return ExitOk;
+    }
+
+    private static int PrintHelp(TextWriter output)
+    {
+        PrintUsage(output);
+        return ExitOk;
+    }
+
+    private static int UnknownOption(string option, TextWriter output, TextWriter error)
+    {
+        error.WriteLine($"error: unknown option {option}.");
+        PrintUsage(output);
+        return ExitUsage;
+    }
+
+    private static void PrintUsage(TextWriter output)
+    {
+        output.WriteLine("""
             dwgio — read Autodesk DWG files without AutoCAD
 
             Usage:
@@ -80,6 +112,10 @@ internal static class Program
               dwgio scene <file.dwg> <out.json> [--unit u]  Export a neutral IOScene scene document
                                                        (u: mm, cm, m (default), ft or in)
               dwgio svg <file.dwg> <out.svg> [--scale s]    Draw model space to SVG (s: px per unit, default 1)
+              dwgio entities <file.dwg> [--type LINE,CIRCLE] [--json]
+                                                       List decoded entities, one line each or as JSON
+              dwgio --version                          Print the version
+              dwgio --help                             Print this usage
 
             Sections are named as stored, e.g. AcDb:Header, AcDb:Classes, AcDb:SummaryInfo.
             """);
@@ -88,16 +124,16 @@ internal static class Program
     private static string Truncate(string text, int maxLength) =>
         text.Length <= maxLength ? text : text[..maxLength] + "…";
 
-    private static int Inspect(string[] args)
+    private static int Inspect(string[] args, TextWriter output, TextWriter error)
     {
         if (args.Length != 2)
         {
-            PrintUsage();
+            PrintUsage(output);
             return ExitUsage;
         }
 
         var doc = DwgDocument.Open(args[1]);
-        return InspectDocument(doc, Console.Out);
+        return InspectDocument(doc, output);
     }
 
     /// <summary>Writes the inspect report of an opened document. Internal for the CLI tests.</summary>
@@ -189,56 +225,70 @@ internal static class Program
         return ExitOk;
     }
 
-    private static int Export(string[] args)
+    private static int Export(string[] args, TextWriter output, TextWriter error)
     {
         if (args.Length != 2)
         {
-            PrintUsage();
+            PrintUsage(output);
             return ExitUsage;
         }
 
         var doc = DwgDocument.Open(args[0]);
-        string output = args[1];
-        if (Path.GetExtension(output).Equals(".obj", StringComparison.OrdinalIgnoreCase))
+        return ExportDocument(doc, args[1], output, error);
+    }
+
+    /// <summary>Exports an opened document to a target path, where <c>-</c> means standard output. Internal for the CLI tests.</summary>
+    internal static int ExportDocument(DwgDocument doc, string target, TextWriter output, TextWriter error)
+    {
+        if (target == "-")
         {
-            var objResult = DwgSceneExport.SaveObj(doc, output);
-            Console.WriteLine($"{doc.Version}  elements={objResult.ElementCount} ({objResult.ElementsWithGeometry} with geometry)  ->  {output}");
+            // The JSON export to standard output: no summary line may pollute the stream.
+            using var json = new MemoryStream();
+            DwgJsonExporter.Write(doc, json, DwgJsonExportOptions.Default);
+            output.Write(Encoding.UTF8.GetString(json.ToArray()));
+            return ExitOk;
         }
-        else if (Path.GetExtension(output).Equals(".glb", StringComparison.OrdinalIgnoreCase))
+
+        if (Path.GetExtension(target).Equals(".obj", StringComparison.OrdinalIgnoreCase))
         {
-            var glbResult = DwgSceneExport.SaveGlb(doc, output);
-            Console.WriteLine($"{doc.Version}  elements={glbResult.ElementCount} ({glbResult.ElementsWithGeometry} with geometry)  ->  {output}");
+            var objResult = DwgSceneExport.SaveObj(doc, target);
+            output.WriteLine($"{doc.Version}  elements={objResult.ElementCount} ({objResult.ElementsWithGeometry} with geometry)  ->  {target}");
         }
-        else if (Path.GetExtension(output).Equals(".html", StringComparison.OrdinalIgnoreCase))
+        else if (Path.GetExtension(target).Equals(".glb", StringComparison.OrdinalIgnoreCase))
         {
-            var htmlResult = DwgViewerExport.SaveViewer(doc, output);
-            Console.WriteLine($"{doc.Version}  elements={htmlResult.ElementCount} ({htmlResult.ElementsWithGeometry} with geometry)  ->  {output}");
+            var glbResult = DwgSceneExport.SaveGlb(doc, target);
+            output.WriteLine($"{doc.Version}  elements={glbResult.ElementCount} ({glbResult.ElementsWithGeometry} with geometry)  ->  {target}");
+        }
+        else if (Path.GetExtension(target).Equals(".html", StringComparison.OrdinalIgnoreCase))
+        {
+            var htmlResult = DwgViewerExport.SaveViewer(doc, target);
+            output.WriteLine($"{doc.Version}  elements={htmlResult.ElementCount} ({htmlResult.ElementsWithGeometry} with geometry)  ->  {target}");
         }
         else
         {
-            DwgJsonExporter.WriteFile(doc, output, DwgJsonExportOptions.Default);
-            Console.WriteLine($"{doc.Version}  sections={doc.Sections.Count}  ->  {output}");
+            DwgJsonExporter.WriteFile(doc, target, DwgJsonExportOptions.Default);
+            output.WriteLine($"{doc.Version}  sections={doc.Sections.Count}  ->  {target}");
         }
 
         return ExitOk;
     }
 
-    private static int Extract(string[] args)
+    private static int Extract(string[] args, TextWriter output, TextWriter error)
     {
         if (args.Length != 4)
         {
-            PrintUsage();
+            PrintUsage(output);
             return ExitUsage;
         }
 
         var doc = DwgDocument.Open(args[1]);
         var bytes = doc.ReadSection(args[2]);
         File.WriteAllBytes(args[3], bytes);
-        Console.WriteLine($"{args[2]}: {Count(bytes.Length)} bytes ->  {args[3]}");
+        output.WriteLine($"{args[2]}: {Count(bytes.Length)} bytes ->  {args[3]}");
         return ExitOk;
     }
 
-    private static int Svg(string[] args)
+    private static int Svg(string[] args, TextWriter output, TextWriter error)
     {
         double scale = 1.0;
         var positional = new List<string>(2);
@@ -248,7 +298,7 @@ internal static class Program
             {
                 if (i + 1 >= args.Length || !double.TryParse(args[i + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out scale) || scale <= 0)
                 {
-                    Console.Error.WriteLine("error: --scale needs a positive number of pixels per drawing unit.");
+                    error.WriteLine("error: --scale needs a positive number of pixels per drawing unit.");
                     return ExitUsage;
                 }
 
@@ -262,17 +312,17 @@ internal static class Program
 
         if (positional.Count != 2)
         {
-            PrintUsage();
+            PrintUsage(output);
             return ExitUsage;
         }
 
         var doc = DwgDocument.Open(positional[0]);
         DwgSvgExporter.WriteFile(doc, positional[1], new DwgSvgOptions { Scale = scale });
-        Console.WriteLine($"{doc.Version}  entities={doc.Entities.Count}  ->  {positional[1]}");
+        output.WriteLine($"{doc.Version}  entities={Count(doc.Entities.Count)}  ->  {positional[1]}");
         return ExitOk;
     }
 
-    private static int Scene(string[] args)
+    private static int Scene(string[] args, TextWriter output, TextWriter error)
     {
         string? unit = null;
         var positional = new List<string>(3);
@@ -282,7 +332,7 @@ internal static class Program
             {
                 if (i + 1 >= args.Length)
                 {
-                    Console.Error.WriteLine("error: --unit needs a value (mm, cm, m, ft or in).");
+                    error.WriteLine("error: --unit needs a value (mm, cm, m, ft or in).");
                     return ExitUsage;
                 }
 
@@ -296,7 +346,7 @@ internal static class Program
 
         if (positional.Count != 2)
         {
-            PrintUsage();
+            PrintUsage(output);
             return ExitUsage;
         }
 
@@ -305,7 +355,7 @@ internal static class Program
         {
             if (!DwgSceneReader.IsSupportedUnit(unit))
             {
-                Console.Error.WriteLine($"error: unknown length unit '{unit}'. Use mm, cm, m, ft or in.");
+                error.WriteLine($"error: unknown length unit '{unit}'. Use mm, cm, m, ft or in.");
                 return ExitUsage;
             }
 
@@ -314,31 +364,31 @@ internal static class Program
 
         var result = DwgSceneReader.Read(positional[0], options);
         SceneJson.Save(result.Document, positional[1]);
-        Console.WriteLine(
-            $"{result.Document.Title}: {result.ElementCount} elements ({result.ElementsWithGeometry} with geometry)  ->  {positional[1]}");
+        output.WriteLine(
+            $"{result.Document.Title}: {Count(result.ElementCount)} elements ({Count(result.ElementsWithGeometry)} with geometry)  ->  {positional[1]}");
         foreach (var diagnostic in result.Diagnostics.Take(5))
         {
-            Console.WriteLine($"  {diagnostic.Severity.ToString().ToLowerInvariant()}: {diagnostic.Message}");
+            output.WriteLine($"  {diagnostic.Severity.ToString().ToLowerInvariant()}: {diagnostic.Message}");
         }
 
         if (result.Diagnostics.Count > 5)
         {
-            Console.WriteLine($"  ... and {result.Diagnostics.Count - 5} more");
+            output.WriteLine($"  ... and {Count(result.Diagnostics.Count - 5)} more");
         }
 
         return ExitOk;
     }
 
-    private static int Preview(string[] args)
+    private static int Preview(string[] args, TextWriter output, TextWriter error)
     {
         if (args.Length != 3)
         {
-            PrintUsage();
+            PrintUsage(output);
             return ExitUsage;
         }
 
         var doc = DwgDocument.Open(args[1]);
-        return PreviewDocument(doc, args[2], Console.Out, Console.Error);
+        return PreviewDocument(doc, args[2], output, error);
     }
 
     /// <summary>Writes the thumbnail of an opened document. Internal for the CLI tests.</summary>
@@ -385,5 +435,135 @@ internal static class Program
         }
 
         return (requested, null);
+    }
+
+    /// <summary>Lists decoded entities, one line each, or as a JSON array with --json (#19).</summary>
+    private static int Entities(string[] args, TextWriter output, TextWriter error)
+    {
+        string? file = null;
+        string? types = null;
+        bool json = false;
+        for (int i = 1; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--type":
+                    if (i + 1 >= args.Length)
+                    {
+                        error.WriteLine("error: --type needs a comma-separated list of type names (e.g. LINE,CIRCLE).");
+                        return ExitUsage;
+                    }
+
+                    types = args[++i];
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    if (file is not null)
+                    {
+                        error.WriteLine($"error: unexpected argument '{args[i]}'.");
+                        return ExitUsage;
+                    }
+
+                    file = args[i];
+                    break;
+            }
+        }
+
+        HashSet<string>? filter = null;
+        if (types is not null)
+        {
+            filter = [];
+            foreach (string name in types.Split(','))
+            {
+                string trimmed = name.Trim();
+                if (trimmed.Length == 0)
+                {
+                    continue;
+                }
+
+                if (!EntityDecoder.KnownTypeNames.Contains(trimmed))
+                {
+                    error.WriteLine($"error: unknown type '{trimmed}'. Known types include LINE, CIRCLE, ARC, POINT, TEXT and MTEXT.");
+                    return ExitUsage;
+                }
+
+                filter.Add(trimmed);
+            }
+        }
+
+        if (file is null)
+        {
+            PrintUsage(output);
+            return ExitUsage;
+        }
+
+        var doc = DwgDocument.Open(file);
+        return EntitiesDocument(doc, json, filter, output);
+    }
+
+    /// <summary>Writes the entities of an opened document, filtered by type; internal for the CLI tests.</summary>
+    internal static int EntitiesDocument(DwgDocument document, bool json, HashSet<string>? filter, TextWriter output)
+    {
+        IEnumerable<DwgEntity> entities = document.Entities;
+        if (filter is not null)
+        {
+            entities = entities.Where(e => filter.Contains(e.TypeName));
+        }
+
+        if (json)
+        {
+            WriteEntitiesJson(output, entities);
+        }
+        else
+        {
+            foreach (var entity in entities)
+            {
+                output.WriteLine(entity.ToString());
+            }
+        }
+
+        return ExitOk;
+    }
+
+    private static void WriteEntitiesJson(TextWriter output, IEnumerable<DwgEntity> entities)
+    {
+        using var json = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(json, new JsonWriterOptions { Indented = false }))
+        {
+            writer.WriteStartArray();
+            foreach (var entity in entities)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("type", entity.TypeName);
+                writer.WriteString("handle", entity.Handle.ToString("X", CultureInfo.InvariantCulture));
+                writer.WriteString("kind", entity.Kind.ToString());
+                if (entity.Geometry is { } geometry)
+                {
+                    writer.WriteStartArray("geometry");
+                    foreach (var value in geometry)
+                    {
+                        if (double.IsFinite(value))
+                        {
+                            writer.WriteNumberValue(Math.Round(value, 6));
+                        }
+                        else
+                        {
+                            writer.WriteNullValue();
+                        }
+                    }
+
+                    writer.WriteEndArray();
+                }
+
+                writer.WriteNumber("colorIndex", entity.ColorIndex);
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndArray();
+        }
+
+        output.Write(Encoding.UTF8.GetString(json.ToArray()));
     }
 }

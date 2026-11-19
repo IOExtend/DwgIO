@@ -7,6 +7,11 @@ API between minor releases.
 ## [Unreleased]
 
 ### Added
+- `dwgio --version` and `--help` (and `-v`/`-h`) print the version and the usage with exit code 0; an unknown
+  option still exits 1 (#18).
+- `dwgio entities <file.dwg> [--type LINE,CIRCLE] [--json]` lists decoded entities one line each or as a JSON
+  array, with the type filter validated against the known type names (#19). The JSON export writes to standard
+  output when the target is `-` (#19).
 - `DwgIO.Scene` package: converts a drawing into a neutral [IOScene](https://www.nuget.org/packages/IOScene) scene
   document, the shared scene model of the IOExtend tools. One element per decoded entity with the handle as
   `SourceId`, line and point geometries scaled to metres (`DwgSceneOptions.LengthUnit`), ACI colours on the

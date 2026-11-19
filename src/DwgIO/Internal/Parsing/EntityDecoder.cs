@@ -54,6 +54,9 @@ internal static class EntityDecoder
     public static string TypeName(ushort typeCode) =>
         TypeNames.TryGetValue(typeCode, out var name) ? name : $"Object_{typeCode:X}";
 
+    /// <summary>Every fixed type name the table knows, for validating a filter list.</summary>
+    internal static IReadOnlyCollection<string> KnownTypeNames => TypeNames.Values;
+
     /// <summary>
     /// Entities are the drawable fixed codes 0x01..0x2F. DICTIONARY (0x2A) shares that range but is a
     /// non-graphical object; codes above 0x2F are table, dictionary and control objects.
