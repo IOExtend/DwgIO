@@ -195,7 +195,7 @@ public sealed class DwgDocument
 
         try
         {
-            return DwgHandleMap.Parse(ReadSectionCore(entry));
+            return DwgHandleMap.Parse(ReadSectionCore(entry), _diagnostics.Add);
         }
         catch (Exception ex) when (IsParseFailure(ex))
         {
@@ -215,7 +215,18 @@ public sealed class DwgDocument
         try
         {
             _objectStreamBytes = ReadSectionCore(entry);
-            return ObjectStreamWalker.Walk(_objectStreamBytes, r2010Plus: FileHeader.Version.Year >= 2010);
+            // Drive the walk by the handle map: after a gap it resumes at the next map offset, so records
+            // beyond the gap are still inventoried instead of silently lost.
+            var mapOffsets = HandleMap is null
+                ? null
+                : HandleMap.Entries.Select(e => e.Offset).Distinct().OrderBy(o => o).ToList();
+            var objects = ObjectStreamWalker.Walk(_objectStreamBytes, r2010Plus: FileHeader.Version.Year >= 2010, mapOffsets, _diagnostics.Add);
+            if (HandleMap is { Count: > 0 } map && objects.Count < map.Count)
+            {
+                _diagnostics.Add($"AcDb:AcDbObjects: inventory holds {objects.Count} records; the handle map lists {map.Count} entries ({map.Count - objects.Count} unreached)");
+            }
+
+            return objects;
         }
         catch (Exception ex) when (IsParseFailure(ex))
         {

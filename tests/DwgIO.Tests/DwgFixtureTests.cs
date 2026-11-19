@@ -12,16 +12,22 @@ public class DwgFixtureTests
 {
     /// <summary>Runs <paramref name="check"/> on every fixture and fails with one line per failing file (name only,
     /// never the full path). The check returns false when a file legitimately lacks what it needs (an optional
-    /// section); when no file had it, the test is skipped rather than passed.</summary>
+    /// section); when no file had it, the test is skipped rather than passed. Drawings of an unsupported version
+    /// are ignored and counted in the skip reason, so one AC1021 file in the folder does not fail every test.</summary>
     private static void CheckAll(Func<string, bool> check, string requirement)
     {
         var failures = new List<string>();
         int checkedFiles = 0;
+        int unsupported = 0;
         foreach (string path in TestFiles.DwgFiles())
         {
             try
             {
                 if (check(path)) checkedFiles++;
+            }
+            catch (DwgUnsupportedVersionException)
+            {
+                unsupported++;
             }
             catch (Exception ex) when (ex is not SkipException)
             {
@@ -30,7 +36,12 @@ public class DwgFixtureTests
         }
 
         Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
-        if (checkedFiles == 0) throw new SkipException($"No private fixture has {requirement}.");
+        if (checkedFiles == 0)
+        {
+            throw new SkipException(unsupported > 0
+                ? $"No private fixture has {requirement}; {unsupported} drawing(s) of an unsupported version were ignored."
+                : $"No private fixture has {requirement}.");
+        }
     }
 
     private static void CheckAll(Action<string> check) =>

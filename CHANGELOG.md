@@ -24,6 +24,12 @@ API between minor releases.
 - `dwgio inspect` is written through a `TextWriter`, so the report is testable directly.
 
 ### Fixed
+- Object stream: after a gap (a zero run or a broken record) the object walk resynchronises at the next
+  handle-map offset instead of stopping, and every early stop or skipped gap is reported in `Diagnostics`; the
+  inventory-versus-handle-map difference is reported as well, and `DwgHandleMap.Parse` reports truncated blocks
+  and drops negative offsets with a diagnostic (#13).
+- Fixture tests skip drawings of an unsupported version and count them in the skip reason, so one AC1021 file
+  in the fixture folder does not fail every test (#17).
 - Entity colour: the DXF 62 index takes the low 9 bits of the stored colour value, so BYLAYER (256) is reported
   as 256 and not as 0 (which also means BYBLOCK) (#40). The JSON export writes `colorIndex` for BYBLOCK and
   BYLAYER so they are distinguishable.
