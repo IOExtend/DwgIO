@@ -1,6 +1,8 @@
 using DwgIO;
 using DwgIO.Json;
 using DwgIO.Model;
+using DwgIO.Scene;
+using IOScene;
 
 namespace DwgIO.Cli;
 
@@ -27,6 +29,7 @@ internal static class Program
                 "inspect" => Inspect(args),
                 "extract" => Extract(args),
                 "preview" => Preview(args),
+                "scene" => Scene(args),
                 _ => Export(args),
             };
         }
@@ -59,9 +62,11 @@ internal static class Program
 
             Usage:
               dwgio inspect <file.dwg>                 Print version + section table
-              dwgio <file.dwg> <output.json>           Export metadata + section catalog to JSON
+              dwgio <file.dwg> <output.json>           Export metadata, section catalog and decoded entities to JSON
               dwgio extract <file.dwg> <section> <out> Write a named section's decompressed bytes
               dwgio preview <file.dwg> <out>           Write the embedded thumbnail image
+              dwgio scene <file.dwg> <out.json> [--unit u]  Export a neutral IOScene scene document
+                                                       (u: mm, cm, m (default), ft or in)
 
             Sections are named as stored, e.g. AcDb:Header, AcDb:Classes, AcDb:SummaryInfo.
             """);
@@ -185,6 +190,63 @@ internal static class Program
         var bytes = doc.ReadSection(args[2]);
         File.WriteAllBytes(args[3], bytes);
         Console.WriteLine($"{args[2]}: {bytes.Length:N0} bytes ->  {args[3]}");
+        return ExitOk;
+    }
+
+    private static int Scene(string[] args)
+    {
+        string? unit = null;
+        var positional = new List<string>(3);
+        for (int i = 1; i < args.Length; i++)
+        {
+            if (args[i] == "--unit")
+            {
+                if (i + 1 >= args.Length)
+                {
+                    Console.Error.WriteLine("error: --unit needs a value (mm, cm, m, ft or in).");
+                    return ExitUsage;
+                }
+
+                unit = args[++i];
+            }
+            else
+            {
+                positional.Add(args[i]);
+            }
+        }
+
+        if (positional.Count != 2)
+        {
+            PrintUsage();
+            return ExitUsage;
+        }
+
+        var options = new DwgSceneOptions();
+        if (unit is not null)
+        {
+            if (!DwgSceneReader.IsSupportedUnit(unit))
+            {
+                Console.Error.WriteLine($"error: unknown length unit '{unit}'. Use mm, cm, m, ft or in.");
+                return ExitUsage;
+            }
+
+            options.LengthUnit = unit;
+        }
+
+        var result = DwgSceneReader.Read(positional[0], options);
+        SceneJson.Save(result.Document, positional[1]);
+        Console.WriteLine(
+            $"{result.Document.Title}: {result.ElementCount} elements ({result.ElementsWithGeometry} with geometry)  ->  {positional[1]}");
+        foreach (var diagnostic in result.Diagnostics.Take(5))
+        {
+            Console.WriteLine($"  {diagnostic.Severity.ToString().ToLowerInvariant()}: {diagnostic.Message}");
+        }
+
+        if (result.Diagnostics.Count > 5)
+        {
+            Console.WriteLine($"  ... and {result.Diagnostics.Count - 5} more");
+        }
+
         return ExitOk;
     }
 

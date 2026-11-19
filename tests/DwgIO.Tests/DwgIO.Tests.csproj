@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\DwgIO\DwgIO.csproj" />
+    <ProjectReference Include="..\..\src\DwgIO.Scene\DwgIO.Scene.csproj" />
   </ItemGroup>
 
 </Project>

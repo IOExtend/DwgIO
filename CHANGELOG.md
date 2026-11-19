@@ -6,6 +6,14 @@ API between minor releases.
 
 ## [Unreleased]
 
+### Added
+- `DwgIO.Scene` package: converts a drawing into a neutral [IOScene](https://www.nuget.org/packages/IOScene) scene
+  document, the shared scene model of the IOExtend tools. One element per decoded entity with the handle as
+  `SourceId`, line and point geometries scaled to metres (`DwgSceneOptions.LengthUnit`), ACI colours on the
+  placements and a conversion report (`DwgSceneResult`). The scene passes the IOScene structural validation and
+  round-trips through the IOScene JSON format.
+- `dwgio scene <file.dwg> <out.json> [--unit mm|cm|m|ft|in]` writes the scene document.
+
 ### Fixed
 - Packed 16-bit and 32-bit integers in their full-width form are read little-endian. They were read with their bytes
   reversed, so entity records that store a colour, extended data size or reactor count in that form were decoded from

@@ -54,6 +54,28 @@ The export has the objects `file`, `version`, `containerHeader`, `summaryInfo`, 
 and `objects`, the numbers `pageCount` and `entityCount`, the `entities` array and the `sections` array. An object whose data the drawing does not hold is left
 out.
 
+## Scene export (`DwgIO.Scene` package)
+
+The `DwgIO.Scene` package turns a drawing into a neutral [IOScene](https://www.nuget.org/packages/IOScene) scene
+document: one model per drawing, one element per decoded entity (the handle as `SourceId`), line and point
+geometries in metres, ACI colours on the placements and the conversion report in `DwgSceneResult.Diagnostics`.
+
+| Type | Use |
+|---|---|
+| `DwgSceneReader` | `Read(path, options?)` opens and converts a drawing file; `Read(document, options)` converts an already opened `DwgDocument` (which needs `ModelKey`, because a document from memory has no file name). |
+| `DwgSceneOptions` | `LengthUnit` (one of `mm`, `cm`, `m`, `ft`, `in`; default `m` — a DWG names no unit, so the caller chooses) and `ModelKey`. |
+| `DwgSceneResult` | The `Document` (an `IOScene.SceneDocument`), `Diagnostics`, element and geometry counters, the applied `MetresPerUnit` and `UnitAssumed`. |
+
+```csharp
+using DwgIO.Scene;
+
+var result = DwgSceneReader.Read("drawing.dwg", new DwgSceneOptions { LengthUnit = "mm" });
+IOScene.SceneJson.Save(result.Document, "drawing.scene.json");
+```
+
+The scene validates against the IOScene contract (`SceneDocument.Validate` reports no error) and round-trips through
+the IOScene JSON format, so it can be fed to the IOScene tools, viewers and exporters.
+
 ## Diagnostics
 
 The library never writes to the console. Parts of a drawing that could not be decoded are listed in

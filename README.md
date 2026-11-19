@@ -12,6 +12,7 @@ DwgIO is a .NET library and command line tool that reads Autodesk AutoCAD drawin
 - Parses drawing metadata: summary information with custom properties and dates, application information, file dependencies and the embedded thumbnail preview.
 - Lists the objects of a drawing through its handle map and decodes the geometry of LINE, CIRCLE, ARC and POINT entities.
 - Writes a JSON export of the metadata, the section catalog and the decoded entities.
+- Converts a drawing into a neutral [IOScene](https://www.nuget.org/packages/IOScene) scene document (`DwgIO.Scene` package): geometry in metres, ACI entity colours, one element per entity with its handle.
 
 ## Install
 
@@ -21,13 +22,14 @@ Install the command line tool:
 dotnet tool install --global DwgIO.Cli
 ```
 
-and add the library to a .NET project:
+and add the libraries to a .NET project:
 
 ```sh
 dotnet add package DwgIO
+dotnet add package DwgIO.Scene
 ```
 
-The library targets .NET 8 and .NET 10. It uses managed code without native dependencies or Windows-only APIs and supports Windows, Linux and macOS. Tests currently run on Windows.
+The libraries target .NET 8 and .NET 10. They use managed code without native dependencies or Windows-only APIs and support Windows, Linux and macOS. Tests currently run on Windows.
 
 ## Command line
 
@@ -53,6 +55,12 @@ Save the embedded thumbnail preview. Without an extension, `.png`, `.wmf` or `.b
 
 ```sh
 dwgio preview drawing.dwg thumbnail
+```
+
+Export a neutral IOScene scene document (geometry in metres, ACI colours, one element per decoded entity). `--unit` names the drawing unit the coordinates are scaled from — one of `mm`, `cm`, `m` (default), `ft`, `in`:
+
+```sh
+dwgio scene drawing.dwg drawing.scene.json --unit mm
 ```
 
 Errors go to standard error.
@@ -96,6 +104,17 @@ foreach (var entity in doc.Entities)
 
 The JSON export is `DwgJsonExporter` in the `DwgIO.Json` namespace. See [Getting started](docs/getting-started.md) and [Public API](docs/public-api.md) for the supported types.
 
+The scene export is `DwgSceneReader` in the `DwgIO.Scene` package. It converts a drawing into an `IOScene.SceneDocument` — the neutral scene model of the IOExtend tools, shared with RvtIO and NwcIO:
+
+```csharp
+using DwgIO.Scene;
+
+var scene = DwgSceneReader.Read("drawing.dwg", new DwgSceneOptions { LengthUnit = "mm" });
+IOScene.SceneJson.Save(scene.Document, "drawing.scene.json");
+```
+
+Every coordinate is scaled to metres by `LengthUnit` (a DWG stores plain numbers, so the unit is a caller decision and `UnitAssumed` records it), each entity becomes an element with its handle as `SourceId`, and LINE, CIRCLE, ARC and POINT become line and point geometries with their ACI colour.
+
 The documentation site with the API reference is at <https://ioextend.github.io/DwgIO/>. [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/IOExtend/DwgIO) offers an automatically generated overview of the repository.
 
 ## Status
@@ -111,6 +130,7 @@ The documentation site with the API reference is at <https://ioextend.github.io/
 | `AcDb:AppInfo`, `AcDb:FileDepList` and `AcDb:Preview` parsing | done |
 | Handle map and object stream inventory | done |
 | Entity decoding: LINE, CIRCLE, ARC and POINT geometry | done (partial) |
+| IOScene scene export (`DwgIO.Scene`): entities, geometry, ACI colours | done (partial) |
 | AutoCAD 2007 container (AC1021) | planned |
 | R13 to R2000 container (AC1012 to AC1015) | planned |
 
