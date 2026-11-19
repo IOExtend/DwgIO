@@ -11,6 +11,7 @@
   <ItemGroup>
     <ProjectReference Include="..\DwgIO\DwgIO.csproj" />
     <PackageReference Include="IOScene" />
+    <PackageReference Include="IOScene.Formats" />
   </ItemGroup>
 
   <ItemGroup>

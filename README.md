@@ -13,6 +13,7 @@ DwgIO is a .NET library and command line tool that reads Autodesk AutoCAD drawin
 - Lists the objects of a drawing through its handle map and decodes the geometry of LINE, CIRCLE, ARC and POINT entities.
 - Writes a JSON export of the metadata, the section catalog and the decoded entities.
 - Converts a drawing into a neutral [IOScene](https://www.nuget.org/packages/IOScene) scene document (`DwgIO.Scene` package): geometry in metres, ACI entity colours, one element per entity with its handle.
+- Exports the scene to Wavefront OBJ (with an MTL colour library) and binary glTF (GLB).
 
 ## Install
 
@@ -61,6 +62,13 @@ Export a neutral IOScene scene document (geometry in metres, ACI colours, one el
 
 ```sh
 dwgio scene drawing.dwg drawing.scene.json --unit mm
+```
+
+The plain export command writes OBJ and GLB by output extension, through the same scene:
+
+```sh
+dwgio drawing.dwg drawing.obj   # Wavefront OBJ + drawing.mtl with the ACI colours
+dwgio drawing.dwg drawing.glb   # binary glTF for viewers and web scenes
 ```
 
 Errors go to standard error.
@@ -115,6 +123,8 @@ IOScene.SceneJson.Save(scene.Document, "drawing.scene.json");
 
 Every coordinate is scaled to metres by `LengthUnit` (a DWG stores plain numbers, so the unit is a caller decision and `UnitAssumed` records it), each entity becomes an element with its handle as `SourceId`, and LINE, CIRCLE, ARC and POINT become line and point geometries with their ACI colour.
 
+`DwgSceneExport` writes that scene out in the exchange formats: `SaveObj(document, "drawing.obj", options)` produces an OBJ with an adjacent MTL colour library (written as a pair, atomically), `SaveGlb(document, "drawing.glb", options)` produces binary glTF. Both return the same `DwgSceneResult` report.
+
 The documentation site with the API reference is at <https://ioextend.github.io/DwgIO/>. [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/IOExtend/DwgIO) offers an automatically generated overview of the repository.
 
 ## Status
@@ -131,6 +141,7 @@ The documentation site with the API reference is at <https://ioextend.github.io/
 | Handle map and object stream inventory | done |
 | Entity decoding: LINE, CIRCLE, ARC and POINT geometry | done (partial) |
 | IOScene scene export (`DwgIO.Scene`): entities, geometry, ACI colours | done (partial) |
+| OBJ and GLB export through the scene | done (partial) |
 | AutoCAD 2007 container (AC1021) | planned |
 | R13 to R2000 container (AC1012 to AC1015) | planned |
 

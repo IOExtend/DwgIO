@@ -65,6 +65,7 @@ geometries in metres, ACI colours on the placements and the conversion report in
 | `DwgSceneReader` | `Read(path, options?)` opens and converts a drawing file; `Read(document, options)` converts an already opened `DwgDocument` (which needs `ModelKey`, because a document from memory has no file name). |
 | `DwgSceneOptions` | `LengthUnit` (one of `mm`, `cm`, `m`, `ft`, `in`; default `m` — a DWG names no unit, so the caller chooses) and `ModelKey`. |
 | `DwgSceneResult` | The `Document` (an `IOScene.SceneDocument`), `Diagnostics`, element and geometry counters, the applied `MetresPerUnit` and `UnitAssumed`. |
+| `DwgSceneExport` | `SaveObj(document, objPath, options?)` writes an OBJ file with an adjacent MTL colour library; `SaveGlb(document, glbPath, options?)` writes binary glTF. Both return the conversion report; `WriteObj(scene, path)` and `WriteGlb(scene, path)` export an existing scene document. |
 
 ```csharp
 using DwgIO.Scene;
@@ -74,7 +75,8 @@ IOScene.SceneJson.Save(result.Document, "drawing.scene.json");
 ```
 
 The scene validates against the IOScene contract (`SceneDocument.Validate` reports no error) and round-trips through
-the IOScene JSON format, so it can be fed to the IOScene tools, viewers and exporters.
+the IOScene JSON format, so it can be fed to the IOScene tools, viewers and exporters. `DwgSceneExport` writes it to
+OBJ (with an MTL colour library) and GLB through the IOScene.Formats writers.
 
 ## Diagnostics
 

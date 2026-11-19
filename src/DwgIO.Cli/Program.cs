@@ -62,7 +62,8 @@ internal static class Program
 
             Usage:
               dwgio inspect <file.dwg>                 Print version + section table
-              dwgio <file.dwg> <output.json>           Export metadata, section catalog and decoded entities to JSON
+              dwgio <file.dwg> <output>                Export metadata, section catalog and entities to JSON,
+                                                       or the scene to OBJ (.obj) or GLB (.glb)
               dwgio extract <file.dwg> <section> <out> Write a named section's decompressed bytes
               dwgio preview <file.dwg> <out>           Write the embedded thumbnail image
               dwgio scene <file.dwg> <out.json> [--unit u]  Export a neutral IOScene scene document
@@ -173,8 +174,23 @@ internal static class Program
         }
 
         var doc = DwgDocument.Open(args[0]);
-        DwgJsonExporter.WriteFile(doc, args[1], DwgJsonExportOptions.Default);
-        Console.WriteLine($"{doc.Version}  sections={doc.Sections.Count}  ->  {args[1]}");
+        string output = args[1];
+        if (Path.GetExtension(output).Equals(".obj", StringComparison.OrdinalIgnoreCase))
+        {
+            var objResult = DwgSceneExport.SaveObj(doc, output);
+            Console.WriteLine($"{doc.Version}  elements={objResult.ElementCount} ({objResult.ElementsWithGeometry} with geometry)  ->  {output}");
+        }
+        else if (Path.GetExtension(output).Equals(".glb", StringComparison.OrdinalIgnoreCase))
+        {
+            var glbResult = DwgSceneExport.SaveGlb(doc, output);
+            Console.WriteLine($"{doc.Version}  elements={glbResult.ElementCount} ({glbResult.ElementsWithGeometry} with geometry)  ->  {output}");
+        }
+        else
+        {
+            DwgJsonExporter.WriteFile(doc, output, DwgJsonExportOptions.Default);
+            Console.WriteLine($"{doc.Version}  sections={doc.Sections.Count}  ->  {output}");
+        }
+
         return ExitOk;
     }
 
