@@ -54,7 +54,7 @@ Write the decompressed bytes of one named section:
 dwgio extract drawing.dwg AcDb:Header header.bin
 ```
 
-Save the embedded thumbnail preview. Without an extension, `.png`, `.wmf` or `.bmp` is added to match the image:
+Save the embedded thumbnail preview. Without an extension, `.png`, `.wmf` or `.bmp` is added to match the image; a mismatching extension is reported on standard error, and a drawing without a thumbnail exits with code 5:
 
 ```sh
 dwgio preview drawing.dwg thumbnail
@@ -95,7 +95,8 @@ Errors go to standard error.
 | 1 | The command line is wrong. |
 | 2 | The input file does not exist. |
 | 3 | The DWG version is not supported yet (R13 to R2000, R2007) or not recognised. |
-| 4 | The file could not be parsed, the drawing has no thumbnail preview (`preview`), or an unexpected error occurred. |
+| 4 | The file could not be parsed, or an unexpected error occurred. |
+| 5 | The drawing has no thumbnail preview (`preview`). |
 
 ## Library
 

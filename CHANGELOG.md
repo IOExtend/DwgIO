@@ -24,6 +24,9 @@ API between minor releases.
 - `dwgio inspect` is written through a `TextWriter`, so the report is testable directly.
 
 ### Fixed
+- `dwgio preview` exits with code 5 when the drawing has no thumbnail, distinct from the parse-error code, and
+  reports a mismatch between the requested output extension and the image kind on standard error instead of
+  keeping both silent (#14).
 - Encrypted sections (encryption flag 1) are reported in `Diagnostics` and by `dwgio inspect` (the section
   table marks them) instead of being skipped silently; decrypting them remains out of scope (#38).
 - Object stream: after a gap (a zero run or a broken record) the object walk resynchronises at the next

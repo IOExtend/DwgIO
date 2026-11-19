@@ -93,7 +93,7 @@ public sealed class DwgDocument
     public IReadOnlyList<string> Diagnostics { get; } = [];
 
     /// <summary>Creates an in-memory document over a file header and a fixed entity list (tests).</summary>
-    internal DwgDocument(string path, DwgFileHeader fileHeader, IReadOnlyList<DwgEntity> entities)
+    internal DwgDocument(string path, DwgFileHeader fileHeader, IReadOnlyList<DwgEntity> entities, DwgPreview? preview = null)
     {
         Path = path;
         _fileBytes = [];
@@ -102,6 +102,7 @@ public sealed class DwgDocument
         Sections = [];
         Diagnostics = _diagnostics;
         Entities = entities;
+        Preview = preview;
     }
 
     /// <summary>Creates a document over a container built in the tests; reads follow <paramref name="options"/>.</summary>

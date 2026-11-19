@@ -21,6 +21,7 @@ internal static class Program
     private const int ExitFileNotFound = 2;
     private const int ExitUnsupportedVersion = 3;
     private const int ExitParseError = 4;
+    private const int ExitNoPreview = 5;
 
     private static int Main(string[] args)
     {
@@ -337,27 +338,52 @@ internal static class Program
         }
 
         var doc = DwgDocument.Open(args[1]);
+        return PreviewDocument(doc, args[2], Console.Out, Console.Error);
+    }
+
+    /// <summary>Writes the thumbnail of an opened document. Internal for the CLI tests.</summary>
+    internal static int PreviewDocument(DwgDocument doc, string requested, TextWriter output, TextWriter error)
+    {
         var preview = doc.Preview;
         if (preview is null || !preview.HasImage)
         {
-            Console.Error.WriteLine("error: this drawing has no thumbnail preview.");
-            return ExitParseError;
+            error.WriteLine("error: this drawing has no thumbnail preview.");
+            return ExitNoPreview;
         }
 
-        var extension = preview.ImageKind switch
+        var (target, warning) = ResolvePreviewTarget(preview.ImageKind, requested);
+        if (warning is not null)
+        {
+            error.WriteLine(warning);
+        }
+
+        File.WriteAllBytes(target, preview.ImageBytes);
+        output.WriteLine($"Preview: {preview.ImageKind} {Count(preview.ImageBytes.Length)} bytes ->  {target}");
+        return ExitOk;
+    }
+
+    /// <summary>Chooses the output path for a preview: the kind's extension is added when the path has none, and
+    /// a mismatching extension is reported instead of being changed. Internal for the CLI tests.</summary>
+    internal static (string Target, string? Warning) ResolvePreviewTarget(DwgPreviewImageKind kind, string requested)
+    {
+        string expected = kind switch
         {
             DwgPreviewImageKind.Png => ".png",
             DwgPreviewImageKind.Wmf => ".wmf",
             _ => ".bmp",
         };
-        var target = args[2];
-        if (!Path.HasExtension(target) && target.EndsWith(Path.DirectorySeparatorChar) is false && target.EndsWith('/') is false)
+        bool isDirectory = requested.EndsWith(Path.DirectorySeparatorChar) || requested.EndsWith('/');
+        if (!Path.HasExtension(requested) || isDirectory)
         {
-            target += extension;
+            return (requested + expected, null);
         }
 
-        File.WriteAllBytes(target, preview.ImageBytes);
-        Console.WriteLine($"Preview: {preview.ImageKind} {Count(preview.ImageBytes.Length)} bytes ->  {target}");
-        return ExitOk;
+        string actual = Path.GetExtension(requested);
+        if (!actual.Equals(expected, StringComparison.OrdinalIgnoreCase))
+        {
+            return (requested, $"warning: the image is {kind} (expected {expected}); the requested path keeps {actual}");
+        }
+
+        return (requested, null);
     }
 }
