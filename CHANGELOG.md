@@ -29,6 +29,8 @@ API between minor releases.
 - `dwgio inspect` is written through a `TextWriter`, so the report is testable directly.
 
 ### Fixed
+- `DwgAppInfo.Product` is filled from the product XML's `name` attribute ("AutoCAD", "AutoCAD LT",
+  "Teigha(R)", ...), so `dwgio inspect` and the JSON export name the product instead of an empty string (#35).
 - `dwgio preview` exits with code 5 when the drawing has no thumbnail, distinct from the parse-error code, and
   reports a mismatch between the requested output extension and the image kind on standard error instead of
   keeping both silent (#14).

@@ -140,6 +140,32 @@ public class MetadataParserTests
         Assert.Equal("Autodesk DWG. Trusted DWG notice.", appInfo.Comment);
         Assert.Contains("1.2.3.4", appInfo.Version);
         Assert.Contains("ProductInformation", appInfo.ProductXml);
+        // #35: the product XML's name attribute is the product.
+        Assert.Equal("Writer", appInfo.Product);
+    }
+
+    [Fact]
+    public void AppInfo_Product_ComesFromTheXmlNameAttribute()
+    {
+        var data = BuildUnicodeAppInfo(
+            "AppInfoDataList",
+            (ProductXmlEntryId, "<ProductInformation name=\"AutoCAD\" build_version=\"Q.163.0.0(x64)\" install_id_string=\"ACAD-5001:404\"/>"));
+
+        var appInfo = AppInfoParser.Parse(data, 1251);
+
+        Assert.Equal("AutoCAD", appInfo.Product);
+    }
+
+    [Fact]
+    public void AppInfo_Product_IsEmptyWithoutANameAttribute()
+    {
+        var data = BuildUnicodeAppInfo(
+            "AppInfoDataList",
+            (ProductXmlEntryId, "<ProductInformation build_version=\"Q.163.0.0(x64)\"/>"));
+
+        var appInfo = AppInfoParser.Parse(data, 1251);
+
+        Assert.Equal(string.Empty, appInfo.Product);
     }
 
     [Fact]

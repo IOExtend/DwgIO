@@ -24,6 +24,9 @@ internal static partial class AppInfoParser
     [GeneratedRegex("build_version=\\\\?\"([^\"\\\\]+)")]
     private static partial Regex BuildVersionRegex();
 
+    [GeneratedRegex("(?:^|[\\s])name\\s*=\\\\?\"([^\"\\\\]+)")]
+    private static partial Regex ProductNameRegex();
+
     /// <summary>Parses an AppInfo payload; <paramref name="codepage"/> decodes 8-bit strings.</summary>
     public static DwgAppInfo Parse(byte[] data, int codepage)
     {
@@ -56,6 +59,7 @@ internal static partial class AppInfoParser
             Name = name,
             ProductXml = productXml,
             Version = version ?? string.Empty,
+            Product = ExtractProduct(productXml),
         };
     }
 
@@ -109,12 +113,29 @@ internal static partial class AppInfoParser
                 Version = version,
                 Comment = comment,
                 ProductXml = productXml,
+                Product = ExtractProduct(productXml),
             };
         }
         catch (DwgException)
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// The product the product XML names: its <c>name</c> attribute ("AutoCAD", "AutoCAD LT", "Teigha(R)", ...),
+    /// per libredwg's appinfo.spec. Empty when the XML has no readable name attribute.
+    /// </summary>
+    private static string ExtractProduct(string productXml)
+    {
+        if (productXml.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        return ProductNameRegex().Match(productXml) is { Success: true } match
+            ? match.Groups[1].Value
+            : string.Empty;
     }
 
     private static string? TryRead(MetadataByteCursor cursor, Func<MetadataByteCursor, string> read)
