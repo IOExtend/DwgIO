@@ -166,11 +166,8 @@ public static class DwgJsonExporter
                 }
             }
 
-            if (entity.ColorIndex != 0)
-            {
-                writer.WriteNumber("colorIndex", entity.ColorIndex);
-            }
-
+            // Written always: 0 (BYBLOCK) and 256 (BYLAYER) must be distinguishable.
+            writer.WriteNumber("colorIndex", entity.ColorIndex);
             writer.WriteEndObject();
         }
 

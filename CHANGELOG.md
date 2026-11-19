@@ -21,8 +21,16 @@ API between minor releases.
   contains every exported entity. Polylines, curves and text follow as the core decodes them.
 - `DwgViewerExport.SaveViewer` and `dwgio drawing.dwg out.html` write a standalone interactive 3D HTML viewer
   (the IOViewer WebGL runtime embedded with the IOScene scene document; no server, no external scripts).
+- `dwgio inspect` is written through a `TextWriter`, so the report is testable directly.
 
 ### Fixed
+- Entity colour: the DXF 62 index takes the low 9 bits of the stored colour value, so BYLAYER (256) is reported
+  as 256 and not as 0 (which also means BYBLOCK) (#40). The JSON export writes `colorIndex` for BYBLOCK and
+  BYLAYER so they are distinguishable.
+- `dwgio` formats counts and byte sizes invariantly; the output no longer follows the machine's digit grouping
+  (#15).
+- `dwgio inspect` always prints the diagnostic total and the first diagnostics, whether or not any entity was
+  decoded (#16).
 - Packed 16-bit and 32-bit integers in their full-width form are read little-endian. They were read with their bytes
   reversed, so entity records that store a colour, extended data size or reactor count in that form were decoded from
   the wrong bit position and failed or gave NaN or absurd coordinates (#7).

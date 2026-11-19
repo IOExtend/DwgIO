@@ -108,7 +108,10 @@ internal static class EntityDecoder
         }
 
         uint colorValue = reader.ReadPackedShort();
-        int colorIndex = (int)(colorValue & 0xFF);
+        // The colour index takes the low 9 bits (0 BYBLOCK, 1-255 indexed, 256 BYLAYER); the upper byte holds
+        // the flag bits, whose bit 0 doubles as the "index 256" bit of a discrete colour (see libredwg's
+        // common_entity_data.spec, which keeps the same flag = raw >> 8 split).
+        int colorIndex = (int)(colorValue & 0x1FF);
         uint colorFlags = colorValue >> 8;
         if ((colorFlags & 0x40) == 0 && (colorFlags & 0x80) != 0)
         {

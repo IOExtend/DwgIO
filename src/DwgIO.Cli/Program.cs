@@ -1,3 +1,4 @@
+using System.Globalization;
 using DwgIO;
 using DwgIO.Json;
 using DwgIO.Model;
@@ -8,6 +9,13 @@ namespace DwgIO.Cli;
 
 internal static class Program
 {
+    /// <summary>Formats a count or byte size with digit grouping, invariantly, so the output does not depend
+    /// on the machine's locale.</summary>
+    internal static string Count(long value) => value.ToString("N0", CultureInfo.InvariantCulture);
+
+    /// <summary>Formats a bare number, invariantly.</summary>
+    internal static string Plain(double value) => value.ToString(CultureInfo.InvariantCulture);
+
     private const int ExitOk = 0;
     private const int ExitUsage = 1;
     private const int ExitFileNotFound = 2;
@@ -88,81 +96,92 @@ internal static class Program
         }
 
         var doc = DwgDocument.Open(args[1]);
-        Console.WriteLine($"{doc.Path}  ({doc.FileSize:N0} bytes)");
-        Console.WriteLine($"Version: {doc.Version}  codepage={doc.FileHeader.CodepageName}  pages={doc.PageCount}  headerCrc={(doc.ContainerHeader?.HeaderCrcValid == true ? "ok" : doc.ContainerHeader is null ? "n/a" : "MISMATCH")}");
+        return InspectDocument(doc, Console.Out);
+    }
+
+    /// <summary>Writes the inspect report of an opened document. Internal for the CLI tests.</summary>
+    internal static int InspectDocument(DwgDocument doc, TextWriter output)
+    {
+        output.WriteLine($"{doc.Path}  ({Count(doc.FileSize)} bytes)");
+        output.WriteLine($"Version: {doc.Version}  codepage={doc.FileHeader.CodepageName}  pages={doc.PageCount}  headerCrc={(doc.ContainerHeader?.HeaderCrcValid == true ? "ok" : doc.ContainerHeader is null ? "n/a" : "MISMATCH")}");
         if (doc.SummaryInfo is { } summary)
         {
             var title = string.IsNullOrWhiteSpace(summary.Title) ? "(no title)" : summary.Title;
-            Console.WriteLine($"Summary: \"{title}\"  author={summary.Author}  savedBy={summary.LastSavedBy}  modified={summary.ModifiedUtc:yyyy-MM-dd HH:mm} UTC  revision={summary.RevisionNumber}");
+            output.WriteLine($"Summary: \"{title}\"  author={summary.Author}  savedBy={summary.LastSavedBy}  modified={summary.ModifiedUtc:yyyy-MM-dd HH:mm} UTC  revision={summary.RevisionNumber}");
             foreach (var property in summary.Properties)
             {
-                Console.WriteLine($"  custom: {property.Key} = {property.Value}");
+                output.WriteLine($"  custom: {property.Key} = {property.Value}");
             }
         }
 
         if (doc.AppInfo is { } appInfo)
         {
-            Console.WriteLine($"App: {appInfo.Name}  version={appInfo.Version}  product={appInfo.Product}");
+            output.WriteLine($"App: {appInfo.Name}  version={appInfo.Version}  product={appInfo.Product}");
             if (!string.IsNullOrEmpty(appInfo.Comment))
             {
-                Console.WriteLine($"  comment: {Truncate(appInfo.Comment, 120)}");
+                output.WriteLine($"  comment: {Truncate(appInfo.Comment, 120)}");
             }
         }
 
         if (doc.Preview is { } preview)
         {
-            Console.WriteLine($"Preview: {preview.ImageKind} {preview.ImageBytes.Length:N0} bytes");
+            output.WriteLine($"Preview: {preview.ImageKind} {Count(preview.ImageBytes.Length)} bytes");
         }
 
         if (doc.FileDepList is { } deps && deps.Files.Count > 0)
         {
-            Console.WriteLine($"File dependencies: {deps.Files.Count}");
+            output.WriteLine($"File dependencies: {deps.Files.Count}");
             foreach (var dep in deps.Files.Take(5))
             {
-                Console.WriteLine($"  {dep.Filename}  ({dep.FileSize:N0} bytes)");
+                output.WriteLine($"  {dep.Filename}  ({Count(dep.FileSize)} bytes)");
             }
         }
 
         if (doc.Objects.Count > 0)
         {
-            Console.WriteLine($"Objects: {doc.Objects.Count:N0}  (handle map: {doc.HandleMap?.Count ?? 0:N0})");
+            output.WriteLine($"Objects: {Count(doc.Objects.Count)}  (handle map: {Count(doc.HandleMap?.Count ?? 0)})");
             foreach (var group in doc.Objects.GroupBy(o => o.TypeCode).OrderByDescending(g => g.Count()).Take(8))
             {
-                Console.WriteLine($"  type 0x{group.Key:X3}: {group.Count():N0}");
+                output.WriteLine($"  type 0x{group.Key:X3}: {Count(group.Count())}");
             }
         }
 
         if (doc.Entities.Count > 0)
         {
-            Console.WriteLine($"Entities decoded: {doc.Entities.Count:N0}");
+            output.WriteLine($"Entities decoded: {Count(doc.Entities.Count)}");
             foreach (var group in doc.Entities.GroupBy(e => e.Kind).OrderByDescending(g => g.Count()))
             {
-                Console.WriteLine($"  {group.Key}: {group.Count():N0}");
+                output.WriteLine($"  {group.Key}: {Count(group.Count())}");
             }
 
             foreach (var entity in doc.Entities.Where(e => e.Kind != DwgEntityKind.Unknown).Take(5))
             {
-                Console.WriteLine($"  {entity}");
-            }
-
-            foreach (var diagnostic in doc.Diagnostics.Take(3))
-            {
-                Console.WriteLine($"  diagnostics: {diagnostic}");
+                output.WriteLine($"  {entity}");
             }
         }
 
-        Console.WriteLine();
+        if (doc.Diagnostics.Count > 0)
+        {
+            // Always printed, whether or not any entity was decoded: a failed section shows up here alone.
+            output.WriteLine($"Diagnostics: {Count(doc.Diagnostics.Count)}");
+            foreach (var diagnostic in doc.Diagnostics.Take(3))
+            {
+                output.WriteLine($"  {diagnostic}");
+            }
+        }
+
+        output.WriteLine();
 
         if (doc.Sections.Count == 0)
         {
-            Console.WriteLine("(section map not read)");
+            output.WriteLine("(section map not read)");
             return ExitOk;
         }
 
-        Console.WriteLine($"{"Name",-28} {"Size",12} {"Pages",6} {"Compr",6} {"Enc",4} Id");
+        output.WriteLine($"{"Name",-28} {"Size",12} {"Pages",6} {"Compr",6} {"Enc",4} Id");
         foreach (var s in doc.Sections)
         {
-            Console.WriteLine($"{s.Name,-28} {s.Size,12:N0} {s.PageCount,6} {s.Compression,6} {s.Encryption,4} {s.SectionId}");
+            output.WriteLine($"{s.Name,-28} {Count(s.Size),12} {s.PageCount,6} {s.Compression,6} {s.Encryption,4} {s.SectionId}");
         }
 
         return ExitOk;
@@ -213,7 +232,7 @@ internal static class Program
         var doc = DwgDocument.Open(args[1]);
         var bytes = doc.ReadSection(args[2]);
         File.WriteAllBytes(args[3], bytes);
-        Console.WriteLine($"{args[2]}: {bytes.Length:N0} bytes ->  {args[3]}");
+        Console.WriteLine($"{args[2]}: {Count(bytes.Length)} bytes ->  {args[3]}");
         return ExitOk;
     }
 
@@ -337,7 +356,7 @@ internal static class Program
         }
 
         File.WriteAllBytes(target, preview.ImageBytes);
-        Console.WriteLine($"Preview: {preview.ImageKind} {preview.ImageBytes.Length:N0} bytes ->  {target}");
+        Console.WriteLine($"Preview: {preview.ImageKind} {Count(preview.ImageBytes.Length)} bytes ->  {target}");
         return ExitOk;
     }
 }
