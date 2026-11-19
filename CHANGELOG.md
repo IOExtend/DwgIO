@@ -24,6 +24,8 @@ API between minor releases.
 - `dwgio inspect` is written through a `TextWriter`, so the report is testable directly.
 
 ### Fixed
+- Encrypted sections (encryption flag 1) are reported in `Diagnostics` and by `dwgio inspect` (the section
+  table marks them) instead of being skipped silently; decrypting them remains out of scope (#38).
 - Object stream: after a gap (a zero run or a broken record) the object walk resynchronises at the next
   handle-map offset instead of stopping, and every early stop or skipped gap is reported in `Diagnostics`; the
   inventory-versus-handle-map difference is reported as well, and `DwgHandleMap.Parse` reports truncated blocks

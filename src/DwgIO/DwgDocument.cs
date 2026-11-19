@@ -104,6 +104,12 @@ public sealed class DwgDocument
         Entities = entities;
     }
 
+    /// <summary>Creates a document over a container built in the tests; reads follow <paramref name="options"/>.</summary>
+    internal DwgDocument(string path, R2004Container container, DwgFileHeader fileHeader, DwgReaderOptions options)
+        : this(path, [], fileHeader, container, options)
+    {
+    }
+
     /// <summary>Records a non-fatal problem found after the document was opened (e.g. by an exporter).</summary>
     internal void ReportDiagnostic(string message) => _diagnostics.Add(message);
 
@@ -176,8 +182,7 @@ public sealed class DwgDocument
 
     private DwgSummaryInfo? ReadOptionalSummaryInfo()
     {
-        var entry = _container!.SectionMap.FindByName("AcDb:SummaryInfo");
-        if (entry is null || entry.Encryption == 1)
+        if (!TryGetReadableSection("AcDb:SummaryInfo", out var entry))
         {
             return null;
         }
@@ -185,10 +190,28 @@ public sealed class DwgDocument
         return TryParseMetadata("AcDb:SummaryInfo", static bytes => SummaryInfoParser.Parse(bytes), entry);
     }
 
+    /// <summary>Looks up a named section the reader is expected to parse: present and not encrypted. An
+    /// encrypted section is reported once, instead of the data simply going missing.</summary>
+    internal bool TryGetReadableSection(string name, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out SectionEntry? entry)
+    {
+        entry = _container!.SectionMap.FindByName(name);
+        if (entry is null)
+        {
+            return false;
+        }
+
+        if (entry.Encryption == 1)
+        {
+            _diagnostics.Add($"{name}: the section is encrypted (encryption flag 1) and was skipped; decrypting it is not supported");
+            return false;
+        }
+
+        return true;
+    }
+
     private DwgHandleMap? ReadOptionalHandleMap()
     {
-        var entry = _container!.SectionMap.FindByName("AcDb:Handles");
-        if (entry is null || entry.Encryption == 1)
+        if (!TryGetReadableSection("AcDb:Handles", out var entry))
         {
             return null;
         }
@@ -206,8 +229,7 @@ public sealed class DwgDocument
 
     private IReadOnlyList<DwgObjectInfo> ReadOptionalObjects()
     {
-        var entry = _container!.SectionMap.FindByName("AcDb:AcDbObjects");
-        if (entry is null || entry.Encryption == 1)
+        if (!TryGetReadableSection("AcDb:AcDbObjects", out var entry))
         {
             return [];
         }
@@ -269,8 +291,7 @@ public sealed class DwgDocument
 
     private DwgPreview? ReadOptionalPreview()
     {
-        var entry = _container!.SectionMap.FindByName("AcDb:Preview");
-        if (entry is null || entry.Encryption == 1)
+        if (!TryGetReadableSection("AcDb:Preview", out var entry))
         {
             return null;
         }
@@ -278,7 +299,7 @@ public sealed class DwgDocument
         try
         {
             var pageLayout = new List<SectionPageLayout>();
-            var bytes = _container.ReadSection(_fileBytes, entry, _verifyChecksums, _diagnostics.Add, pageLayout);
+            var bytes = _container!.ReadSection(_fileBytes, entry, _verifyChecksums, _diagnostics.Add, pageLayout);
             return PreviewParser.Parse(bytes, pageLayout);
         }
         catch (Exception ex) when (IsParseFailure(ex))
@@ -291,8 +312,7 @@ public sealed class DwgDocument
     private T? TryReadMetadata<T>(string sectionName, Func<byte[], T> parse)
         where T : class
     {
-        var entry = _container!.SectionMap.FindByName(sectionName);
-        if (entry is null || entry.Encryption == 1)
+        if (!TryGetReadableSection(sectionName, out var entry))
         {
             return null;
         }

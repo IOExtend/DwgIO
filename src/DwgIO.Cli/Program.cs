@@ -181,7 +181,8 @@ internal static class Program
         output.WriteLine($"{"Name",-28} {"Size",12} {"Pages",6} {"Compr",6} {"Enc",4} Id");
         foreach (var s in doc.Sections)
         {
-            output.WriteLine($"{s.Name,-28} {Count(s.Size),12} {s.PageCount,6} {s.Compression,6} {s.Encryption,4} {s.SectionId}");
+            string name = s.Encryption == 1 ? $"{s.Name} [encrypted]" : s.Name;
+            output.WriteLine($"{name,-28} {Count(s.Size),12} {s.PageCount,6} {s.Compression,6} {s.Encryption,4} {s.SectionId}");
         }
 
         return ExitOk;
