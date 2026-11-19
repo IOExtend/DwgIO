@@ -64,7 +64,8 @@ internal static class Program
             Usage:
               dwgio inspect <file.dwg>                 Print version + section table
               dwgio <file.dwg> <output>                Export metadata, section catalog and entities to JSON,
-                                                       or the scene to OBJ (.obj) or GLB (.glb)
+                                                       or the scene to OBJ (.obj), GLB (.glb) or a standalone
+                                                       interactive 3D HTML viewer (.html)
               dwgio extract <file.dwg> <section> <out> Write a named section's decompressed bytes
               dwgio preview <file.dwg> <out>           Write the embedded thumbnail image
               dwgio scene <file.dwg> <out.json> [--unit u]  Export a neutral IOScene scene document
@@ -186,6 +187,11 @@ internal static class Program
         {
             var glbResult = DwgSceneExport.SaveGlb(doc, output);
             Console.WriteLine($"{doc.Version}  elements={glbResult.ElementCount} ({glbResult.ElementsWithGeometry} with geometry)  ->  {output}");
+        }
+        else if (Path.GetExtension(output).Equals(".html", StringComparison.OrdinalIgnoreCase))
+        {
+            var htmlResult = DwgViewerExport.SaveViewer(doc, output);
+            Console.WriteLine($"{doc.Version}  elements={htmlResult.ElementCount} ({htmlResult.ElementsWithGeometry} with geometry)  ->  {output}");
         }
         else
         {

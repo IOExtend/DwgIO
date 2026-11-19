@@ -19,6 +19,8 @@ API between minor releases.
 - `DwgSvgExporter` and `dwgio svg <file.dwg> <out.svg> [--scale n]` draw model space to SVG (#32): LINE,
   CIRCLE, ARC and POINT in the top view with the y axis up, in their ACI colours, inside a view box that
   contains every exported entity. Polylines, curves and text follow as the core decodes them.
+- `DwgViewerExport.SaveViewer` and `dwgio drawing.dwg out.html` write a standalone interactive 3D HTML viewer
+  (the IOViewer WebGL runtime embedded with the IOScene scene document; no server, no external scripts).
 
 ### Fixed
 - Packed 16-bit and 32-bit integers in their full-width form are read little-endian. They were read with their bytes
