@@ -14,6 +14,7 @@ DwgIO is a .NET library and command line tool that reads Autodesk AutoCAD drawin
 - Writes a JSON export of the metadata, the section catalog and the decoded entities.
 - Converts a drawing into a neutral [IOScene](https://www.nuget.org/packages/IOScene) scene document (`DwgIO.Scene` package): geometry in metres, ACI entity colours, one element per entity with its handle.
 - Exports the scene to Wavefront OBJ (with an MTL colour library) and binary glTF (GLB).
+- Draws model space to SVG (`dwgio svg`): LINE, CIRCLE, ARC and POINT in the top view, in their ACI colours.
 
 ## Install
 
@@ -69,6 +70,12 @@ The plain export command writes OBJ and GLB by output extension, through the sam
 ```sh
 dwgio drawing.dwg drawing.obj   # Wavefront OBJ + drawing.mtl with the ACI colours
 dwgio drawing.dwg drawing.glb   # binary glTF for viewers and web scenes
+```
+
+Draw model space to SVG (X to the right, Y up, ACI colours; `--scale` sets pixels per drawing unit):
+
+```sh
+dwgio svg drawing.dwg drawing.svg --scale 2
 ```
 
 Errors go to standard error.
@@ -142,6 +149,7 @@ The documentation site with the API reference is at <https://ioextend.github.io/
 | Entity decoding: LINE, CIRCLE, ARC and POINT geometry | done (partial) |
 | IOScene scene export (`DwgIO.Scene`): entities, geometry, ACI colours | done (partial) |
 | OBJ and GLB export through the scene | done (partial) |
+| SVG export of model space (`dwgio svg`) | done (partial) |
 | AutoCAD 2007 container (AC1021) | planned |
 | R13 to R2000 container (AC1012 to AC1015) | planned |
 

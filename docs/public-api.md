@@ -66,6 +66,7 @@ geometries in metres, ACI colours on the placements and the conversion report in
 | `DwgSceneOptions` | `LengthUnit` (one of `mm`, `cm`, `m`, `ft`, `in`; default `m` — a DWG names no unit, so the caller chooses) and `ModelKey`. |
 | `DwgSceneResult` | The `Document` (an `IOScene.SceneDocument`), `Diagnostics`, element and geometry counters, the applied `MetresPerUnit` and `UnitAssumed`. |
 | `DwgSceneExport` | `SaveObj(document, objPath, options?)` writes an OBJ file with an adjacent MTL colour library; `SaveGlb(document, glbPath, options?)` writes binary glTF. Both return the conversion report; `WriteObj(scene, path)` and `WriteGlb(scene, path)` export an existing scene document. |
+| `DwgSvgExporter`, `DwgSvgOptions` | Draws model space (LINE, CIRCLE, ARC, POINT) to SVG in the top view, in ACI colours, with a view box that contains every drawn entity. `WriteFile(document, path, options?)`, `Write(document, stream, options?)`. `DwgSvgOptions` holds `Scale` (pixels per drawing unit), `StrokeWidth` and `Background`. |
 
 ```csharp
 using DwgIO.Scene;

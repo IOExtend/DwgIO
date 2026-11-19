@@ -30,6 +30,7 @@ internal static class Program
                 "extract" => Extract(args),
                 "preview" => Preview(args),
                 "scene" => Scene(args),
+                "svg" => Svg(args),
                 _ => Export(args),
             };
         }
@@ -68,6 +69,7 @@ internal static class Program
               dwgio preview <file.dwg> <out>           Write the embedded thumbnail image
               dwgio scene <file.dwg> <out.json> [--unit u]  Export a neutral IOScene scene document
                                                        (u: mm, cm, m (default), ft or in)
+              dwgio svg <file.dwg> <out.svg> [--scale s]    Draw model space to SVG (s: px per unit, default 1)
 
             Sections are named as stored, e.g. AcDb:Header, AcDb:Classes, AcDb:SummaryInfo.
             """);
@@ -206,6 +208,40 @@ internal static class Program
         var bytes = doc.ReadSection(args[2]);
         File.WriteAllBytes(args[3], bytes);
         Console.WriteLine($"{args[2]}: {bytes.Length:N0} bytes ->  {args[3]}");
+        return ExitOk;
+    }
+
+    private static int Svg(string[] args)
+    {
+        double scale = 1.0;
+        var positional = new List<string>(2);
+        for (int i = 1; i < args.Length; i++)
+        {
+            if (args[i] == "--scale")
+            {
+                if (i + 1 >= args.Length || !double.TryParse(args[i + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out scale) || scale <= 0)
+                {
+                    Console.Error.WriteLine("error: --scale needs a positive number of pixels per drawing unit.");
+                    return ExitUsage;
+                }
+
+                i++;
+            }
+            else
+            {
+                positional.Add(args[i]);
+            }
+        }
+
+        if (positional.Count != 2)
+        {
+            PrintUsage();
+            return ExitUsage;
+        }
+
+        var doc = DwgDocument.Open(positional[0]);
+        DwgSvgExporter.WriteFile(doc, positional[1], new DwgSvgOptions { Scale = scale });
+        Console.WriteLine($"{doc.Version}  entities={doc.Entities.Count}  ->  {positional[1]}");
         return ExitOk;
     }
 

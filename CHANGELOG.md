@@ -16,6 +16,9 @@ API between minor releases.
 - `DwgSceneExport.SaveObj`/`SaveGlb` write a drawing to Wavefront OBJ (with an adjacent MTL colour library,
   written as a pair) and binary glTF (GLB) through the IOScene writers; `dwgio drawing.dwg out.obj` and
   `dwgio drawing.dwg out.glb` dispatch by extension.
+- `DwgSvgExporter` and `dwgio svg <file.dwg> <out.svg> [--scale n]` draw model space to SVG (#32): LINE,
+  CIRCLE, ARC and POINT in the top view with the y axis up, in their ACI colours, inside a view box that
+  contains every exported entity. Polylines, curves and text follow as the core decodes them.
 
 ### Fixed
 - Packed 16-bit and 32-bit integers in their full-width form are read little-endian. They were read with their bytes

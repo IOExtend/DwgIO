@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="DwgIO.Tests" />
+    <InternalsVisibleTo Include="DwgIO.Scene" />
   </ItemGroup>
 
 </Project>
