@@ -1,6 +1,6 @@
 namespace DwgIO;
 
-/// <summary>Options controlling what <see cref="DwgDocument.Open"/> reads.</summary>
+/// <summary>Options controlling what <see cref="DwgDocument.Open(string, DwgReaderOptions?)"/> reads.</summary>
 public sealed class DwgReaderOptions
 {
     /// <summary>Options with every default value.</summary>
