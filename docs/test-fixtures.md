@@ -12,7 +12,7 @@ The fixture tests find their input through one helper, `TestFiles` in the test p
 of these folders together:
 
 - the folder named by the environment variable `DWGIO_TEST_FILES` (ignored when the folder does not exist);
-- the committed redistributable drawings of [`test-files/public`](../test-files/public/README.md), with their
+- the committed redistributable drawings of [test-files/public](https://github.com/IOExtend/DwgIO/blob/main/test-files/public/README.md), with their
   origin and licence recorded next to each file;
 - a folder `test_files` in the repository root (or in any parent of the test binary folder).
 
