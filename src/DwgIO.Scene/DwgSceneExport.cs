@@ -24,7 +24,10 @@ public static class DwgSceneExport
     }
 
     /// <summary>Writes a scene to a Wavefront OBJ file with an adjacent MTL library
-    /// (<c>&lt;objPath&gt;</c> with <c>.mtl</c> instead of its extension).</summary>
+    /// (<c>&lt;objPath&gt;</c> with <c>.mtl</c> instead of its extension). The pair is replaced so that a
+    /// failure at any step leaves the previous pair untouched: the old MTL is first renamed aside, the new
+    /// MTL moves in, and the OBJ — which names that MTL in its <c>mtllib</c> — moves in last, after which
+    /// the old MTL backup is dropped.</summary>
     /// <param name="scene">The scene to export.</param>
     /// <param name="objPath">Path to the OBJ file.</param>
     public static void WriteObj(SceneDocument scene, string objPath)
@@ -37,10 +40,11 @@ public static class DwgSceneExport
         string mtlPath = Path.Combine(directory, mtlName);
         string objTemp = Path.Combine(directory, $".dwgio-{Guid.NewGuid():N}.obj");
         string mtlTemp = Path.Combine(directory, $".dwgio-{Guid.NewGuid():N}.mtl");
+        string? mtlBackup = null;
+        bool mtlReplaced = false;
         try
         {
-            // OBJ and MTL are written as a pair: both temporary files are written first, then moved in, so a
-            // failure leaves the previous pair in place.
+            // Both temporary files are written first; the OBJ names the MTL by its stable name.
             using (var objStream = new FileStream(objTemp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             using (var objWriter = new StreamWriter(objStream, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false)))
             using (var mtlStream = new FileStream(mtlTemp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
@@ -49,11 +53,34 @@ public static class DwgSceneExport
                 ObjSceneWriter.Write(scene, objWriter, mtlWriter, mtlName);
             }
 
+            // The old MTL steps aside first, so it can step back in when either move fails.
+            if (File.Exists(mtlPath))
+            {
+                mtlBackup = Path.Combine(directory, $".dwgio-{Guid.NewGuid():N}.bak");
+                File.Move(mtlPath, mtlBackup);
+            }
+
             File.Move(mtlTemp, mtlPath, overwrite: true);
+            mtlReplaced = true;
             File.Move(objTemp, fullPath, overwrite: true);
+            if (mtlBackup is not null)
+            {
+                File.Delete(mtlBackup);
+                mtlBackup = null;
+            }
         }
         catch
         {
+            // Restore the previous pair: the old MTL comes back, and a fresh export leaves no MTL behind.
+            if (mtlBackup is not null && File.Exists(mtlBackup))
+            {
+                File.Move(mtlBackup, mtlPath, overwrite: true);
+            }
+            else if (mtlReplaced && File.Exists(mtlPath))
+            {
+                File.Delete(mtlPath);
+            }
+
             TryDelete(objTemp);
             TryDelete(mtlTemp);
             throw;
