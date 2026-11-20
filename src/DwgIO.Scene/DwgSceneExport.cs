@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+using DwgIO.Internal;
 using IOScene;
 using IOScene.Formats;
 
@@ -36,18 +39,31 @@ public static class DwgSceneExport
         ArgumentException.ThrowIfNullOrEmpty(objPath);
         string fullPath = Path.GetFullPath(objPath);
         string directory = Path.GetDirectoryName(fullPath) ?? Directory.GetCurrentDirectory();
-        string mtlName = Path.ChangeExtension(Path.GetFileName(fullPath), ".mtl");
+        if (Path.GetExtension(fullPath).Equals(".mtl", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("The OBJ destination must differ from its material file.", nameof(objPath));
+        }
+
+        string objName = Path.GetFileName(fullPath);
+        string mtlName = Path.ChangeExtension(objName, ".mtl");
+        if (mtlName.Any(c => char.IsWhiteSpace(c) || char.IsControl(c) || c is ':' or '#' or '\\'))
+        {
+            mtlName = $"materials-{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(objName)))}.mtl";
+        }
+
         string mtlPath = Path.Combine(directory, mtlName);
-        string objTemp = Path.Combine(directory, $".dwgio-{Guid.NewGuid():N}.obj");
-        string mtlTemp = Path.Combine(directory, $".dwgio-{Guid.NewGuid():N}.mtl");
+        string? objTemp = null;
+        string? mtlTemp = null;
         string? mtlBackup = null;
         bool mtlReplaced = false;
         try
         {
+            objTemp = AtomicOutput.CreateTemporary(fullPath);
+            mtlTemp = AtomicOutput.CreateTemporary(mtlPath);
             // Both temporary files are written first; the OBJ names the MTL by its stable name.
-            using (var objStream = new FileStream(objTemp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            using (var objStream = new FileStream(objTemp, FileMode.Truncate, FileAccess.Write, FileShare.None))
             using (var objWriter = new StreamWriter(objStream, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false)))
-            using (var mtlStream = new FileStream(mtlTemp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            using (var mtlStream = new FileStream(mtlTemp, FileMode.Truncate, FileAccess.Write, FileShare.None))
             using (var mtlWriter = new StreamWriter(mtlStream, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false)))
             {
                 ObjSceneWriter.Write(scene, objWriter, mtlWriter, mtlName);
@@ -65,8 +81,7 @@ public static class DwgSceneExport
             File.Move(objTemp, fullPath, overwrite: true);
             if (mtlBackup is not null)
             {
-                File.Delete(mtlBackup);
-                mtlBackup = null;
+                AtomicOutput.TryDelete(mtlBackup);
             }
         }
         catch
@@ -81,9 +96,12 @@ public static class DwgSceneExport
                 File.Delete(mtlPath);
             }
 
-            TryDelete(objTemp);
-            TryDelete(mtlTemp);
             throw;
+        }
+        finally
+        {
+            AtomicOutput.TryDelete(objTemp);
+            AtomicOutput.TryDelete(mtlTemp);
         }
     }
 
@@ -95,7 +113,7 @@ public static class DwgSceneExport
     public static DwgSceneResult SaveGlb(DwgDocument document, string glbPath, DwgSceneOptions? options = null)
     {
         var result = DwgSceneReader.Read(document, OptionsFor(document, glbPath, options));
-        GlbSceneWriter.Save(result.Document, glbPath);
+        WriteGlb(result.Document, glbPath);
         return result;
     }
 
@@ -105,7 +123,7 @@ public static class DwgSceneExport
     public static void WriteGlb(SceneDocument scene, string glbPath)
     {
         ArgumentNullException.ThrowIfNull(scene);
-        GlbSceneWriter.Save(scene, glbPath);
+        AtomicOutput.Write(glbPath, stream => GlbSceneWriter.Write(scene, stream));
     }
 
     private static DwgSceneOptions OptionsFor(DwgDocument document, string path, DwgSceneOptions? options)
@@ -121,21 +139,5 @@ public static class DwgSceneExport
             LengthUnit = options?.LengthUnit ?? "m",
             ModelKey = Path.GetFileName(path),
         };
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (IOException)
-        {
-            // Best-effort cleanup: the original export failure is the error worth reporting.
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Best-effort cleanup: the original export failure is the error worth reporting.
-        }
     }
 }

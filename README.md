@@ -14,6 +14,8 @@ DwgIO is a .NET library and command line tool that reads Autodesk AutoCAD drawin
 - Writes a JSON export of the metadata, the section catalog and the decoded entities.
 - Converts a drawing into a neutral [IOScene](https://www.nuget.org/packages/IOScene) scene document (`DwgIO.Scene` package): geometry in metres, ACI entity colours, one element per entity with its handle.
 - Exports the scene to Wavefront OBJ (with an MTL colour library) and binary glTF (GLB).
+- Draws model space to SVG (`dwgio svg`): LINE, CIRCLE, ARC and POINT in the top view, in their ACI colours.
+- Writes a standalone interactive 3D HTML viewer (`.html`): the WebGL viewer of [IOViewer](https://github.com/IOExtend/IOViewer) embedded with the scene, no server or external scripts.
 
 ## Install
 
@@ -30,7 +32,7 @@ dotnet add package DwgIO
 dotnet add package DwgIO.Scene
 ```
 
-The libraries target .NET 8 and .NET 10. They use managed code without native dependencies or Windows-only APIs and support Windows, Linux and macOS. Tests currently run on Windows.
+The libraries target .NET 8 and .NET 10. They use managed code without native dependencies or Windows-only APIs and support Windows, Linux and macOS. Tests run on Windows, Linux and macOS.
 
 ## Command line
 
@@ -52,7 +54,7 @@ Write the decompressed bytes of one named section:
 dwgio extract drawing.dwg AcDb:Header header.bin
 ```
 
-Save the embedded thumbnail preview. Without an extension, `.png`, `.wmf` or `.bmp` is added to match the image:
+Save the embedded thumbnail preview. Without an extension, `.png`, `.wmf` or `.bmp` is added to match the image; a mismatching extension is reported on standard error, and a drawing without a thumbnail exits with code 5:
 
 ```sh
 dwgio preview drawing.dwg thumbnail
@@ -71,7 +73,32 @@ dwgio drawing.dwg drawing.obj   # Wavefront OBJ + drawing.mtl with the ACI colou
 dwgio drawing.dwg drawing.glb   # binary glTF for viewers and web scenes
 ```
 
-Errors go to standard error.
+Draw model space to SVG (X to the right, Y up, ACI colours; `--scale` sets pixels per drawing unit):
+
+```sh
+dwgio svg drawing.dwg drawing.svg --scale 2
+```
+
+Open the drawing in a standalone interactive 3D HTML viewer:
+
+```sh
+dwgio drawing.dwg drawing.html
+```
+
+List the decoded entities, one line each, optionally filtered by type and as JSON:
+
+```sh
+dwgio entities drawing.dwg --type LINE,CIRCLE
+dwgio entities drawing.dwg --json
+```
+
+The JSON export also writes to standard output when the target is `-`:
+
+```sh
+dwgio drawing.dwg - | jq .summaryInfo
+```
+
+`dwgio --version` prints the package version, `dwgio --help` the usage. Errors go to standard error.
 
 ### Exit codes
 
@@ -81,11 +108,12 @@ Errors go to standard error.
 | 1 | The command line is wrong. |
 | 2 | The input file does not exist. |
 | 3 | The DWG version is not supported yet (R13 to R2000, R2007) or not recognised. |
-| 4 | The file could not be parsed, the drawing has no thumbnail preview (`preview`), or an unexpected error occurred. |
+| 4 | The file could not be parsed, or an unexpected error occurred. |
+| 5 | The drawing has no thumbnail preview (`preview`). |
 
 ## Library
 
-Open a drawing, list its sections and read one of them:
+Open a drawing (from a path or from a stream — a network handle, an archive entry, an already-open file; the stream is read to memory once and `Open(Stream)` gives the same results as `Open(path)`), list its sections and read one of them:
 
 ```csharp
 using System;
@@ -94,6 +122,9 @@ using DwgIO;
 var doc = DwgDocument.Open("drawing.dwg");
 
 Console.WriteLine($"{doc.Version.Release} ({doc.Version.Magic})");
+
+// or from a stream:
+// var doc = DwgDocument.Open(httpResponse.Content.ReadAsStream(), "remote.dwg");
 
 foreach (var section in doc.Sections)
 {
@@ -123,7 +154,7 @@ IOScene.SceneJson.Save(scene.Document, "drawing.scene.json");
 
 Every coordinate is scaled to metres by `LengthUnit` (a DWG stores plain numbers, so the unit is a caller decision and `UnitAssumed` records it), each entity becomes an element with its handle as `SourceId`, and LINE, CIRCLE, ARC and POINT become line and point geometries with their ACI colour.
 
-`DwgSceneExport` writes that scene out in the exchange formats: `SaveObj(document, "drawing.obj", options)` produces an OBJ with an adjacent MTL colour library (written as a pair, atomically), `SaveGlb(document, "drawing.glb", options)` produces binary glTF. Both return the same `DwgSceneResult` report.
+`DwgSceneExport` writes that scene out in the exchange formats: `SaveObj(document, "drawing.obj", options)` produces an OBJ with an adjacent MTL colour library (with rollback if replacement fails), `SaveGlb(document, "drawing.glb", options)` produces binary glTF. Both return the same `DwgSceneResult` report.
 
 The documentation site with the API reference is at <https://ioextend.github.io/DwgIO/>. [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/IOExtend/DwgIO) offers an automatically generated overview of the repository.
 
@@ -142,6 +173,8 @@ The documentation site with the API reference is at <https://ioextend.github.io/
 | Entity decoding: LINE, CIRCLE, ARC and POINT geometry | done (partial) |
 | IOScene scene export (`DwgIO.Scene`): entities, geometry, ACI colours | done (partial) |
 | OBJ and GLB export through the scene | done (partial) |
+| SVG export of model space (`dwgio svg`) | done (partial) |
+| Standalone HTML viewer export through IOViewer | done (partial) |
 | AutoCAD 2007 container (AC1021) | planned |
 | R13 to R2000 container (AC1012 to AC1015) | planned |
 
@@ -152,7 +185,7 @@ The documentation site with the API reference is at <https://ioextend.github.io/
 | AC1012 | R13 | flat section locators | planned |
 | AC1014 | R14 | flat section locators | planned |
 | AC1015 | R2000 | flat section locators | planned |
-| AC1018 | R2004 | paged, compressed sections | done |
+| AC1018 | R2004 | paged, compressed sections | verified locally on real drawings |
 | AC1021 | R2007 | Reed-Solomon coded pages | planned |
 | AC1024 | R2010 | paged, compressed sections | done |
 | AC1027 | R2013 | paged, compressed sections | done |
