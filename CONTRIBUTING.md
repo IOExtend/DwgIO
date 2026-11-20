@@ -29,8 +29,9 @@ facts as they are observed in DWG files, in your own words, in code comments,
 documentation and commit messages.
 
 Do not add vendor code, SDKs, SDK internals, headers or binaries, decompiled or
-leaked source, or anything taken from analysing vendor binaries. Do not add DWG
-or DXF drawings, customer data, or names, paths, sizes or other details of
+leaked source, or anything taken from analysing vendor binaries.
+Add DWG fixtures only under `test-files/public` and only when they meet its origin and licence rules.
+Do not add other drawings, customer data, or names, paths, sizes or other details of
 private sample drawings to the repository, including tests, comments and
 documentation. Test inputs are built synthetically in the tests; tests that
 need private drawings read them from the folder named by `DWGIO_TEST_FILES` and
@@ -87,7 +88,7 @@ Include:
 - The build and test commands run, their results, and any skipped checks.
 - Before and after output comparison results when the output is affected.
 
-Do not add drawings, customer data, vendor code or binaries to the
+Do not add private drawings, customer data, vendor code or binaries to the
 repository. Keep private test drawings outside version control.
 
 Write commit messages in the imperative mood, for example,

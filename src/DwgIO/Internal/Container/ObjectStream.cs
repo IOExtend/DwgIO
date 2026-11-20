@@ -138,15 +138,24 @@ internal static class ObjectStreamWalker
             return 0;
         }
 
-        foreach (ulong offset in mapOffsets)
+        int low = 0;
+        int high = mapOffsets.Count;
+        while (low < high)
         {
-            if (offset > (ulong)stop && offset < (ulong)data.Length)
+            int mid = low + (high - low) / 2;
+            if (mapOffsets[mid] <= (ulong)stop)
             {
-                return (int)offset;
+                low = mid + 1;
+            }
+            else
+            {
+                high = mid;
             }
         }
 
-        return 0;
+        return low < mapOffsets.Count && mapOffsets[low] < (ulong)(data.Length - 2)
+            ? (int)mapOffsets[low]
+            : 0;
     }
 
     private static void Report(Action<string>? diagnostic, string message) => diagnostic?.Invoke(message);
