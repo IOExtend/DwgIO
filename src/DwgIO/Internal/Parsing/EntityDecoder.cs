@@ -10,56 +10,15 @@ namespace DwgIO.Internal.Parsing;
 /// </summary>
 internal static class EntityDecoder
 {
-    private const ushort DictionaryTypeCode = 0x2A;
-
-    /// <summary>Well-known DWG type codes (subset covering the common ones).</summary>
-    private static readonly Dictionary<ushort, string> TypeNames = new()
-    {
-        [0x01] = "TEXT",
-        [0x02] = "ATTRIB",
-        [0x03] = "ATTDEF",
-        [0x04] = "BLOCK",
-        [0x05] = "ENDBLK",
-        [0x06] = "SEQEND",
-        [0x07] = "INSERT",
-        [0x0B] = "VERTEX",
-        [0x0F] = "2DPOLYLINE",
-        [0x10] = "3DPOLYLINE",
-        [0x11] = "ARC",
-        [0x12] = "CIRCLE",
-        [0x13] = "LINE",
-        [0x1B] = "POINT",
-        [0x1C] = "3DFACE",
-        [0x21] = "ELLIPSE",
-        [0x22] = "VIEWPORT",
-        [0x24] = "SPLINE",
-        [0x26] = "3DSOLID",
-        [0x28] = "RAY",
-        [0x29] = "XLINE",
-        [DictionaryTypeCode] = "DICTIONARY",
-        [0x2C] = "MTEXT",
-        [0x2D] = "LEADER",
-        [0x31] = "BLOCK_RECORD",
-        [0x32] = "LAYER_TABLE",
-        [0x33] = "LAYER",
-        [0x34] = "STYLE_TABLE",
-        [0x35] = "STYLE",
-        [0x38] = "LTYPE_TABLE",
-        [0x39] = "LTYPE",
-        [0x4E] = "HATCH",
-        [0x4F] = "XRECORD",
-    };
-
-    /// <summary>Name for a DWG type code, or <c>Object_XX</c> when the code is not in the table.</summary>
-    public static string TypeName(ushort typeCode) =>
-        TypeNames.TryGetValue(typeCode, out var name) ? name : $"Object_{typeCode:X}";
+    /// <summary>
+    /// Name for a fixed type code, via <see cref="DwgObjectTypes.Name"/>.
+    /// </summary>
+    public static string TypeName(ushort typeCode) => DwgObjectTypes.Name(typeCode);
 
     /// <summary>
-    /// Entities are the drawable fixed codes 0x01..0x2F. DICTIONARY (0x2A) shares that range but is a
-    /// non-graphical object; codes above 0x2F are table, dictionary and control objects.
+    /// Tells whether a record of this code is a drawable entity; see <see cref="DwgObjectTypes.IsEntity"/>.
     /// </summary>
-    public static bool IsEntityCode(ushort typeCode) =>
-        typeCode is >= 0x01 and <= 0x2F and not DictionaryTypeCode;
+    public static bool IsEntityCode(ushort typeCode) => DwgObjectTypes.IsEntity(typeCode);
 
     /// <summary>
     /// Decodes an entity from the record payload (starting right after the size prefix).
@@ -99,7 +58,7 @@ internal static class EntityDecoder
             reader.SkipBytes((int)graphicsSize);
         }
 
-        reader.ReadTwoBits(); // entity mode
+        bool isModelSpace = reader.ReadTwoBits() == 2;
         reader.ReadPackedInt(); // reactor count: back-reference handles consumed from the tail later
         reader.ReadBit(); // no extension dictionary flag (R2004+)
         if (year >= 2013)
@@ -167,6 +126,7 @@ internal static class EntityDecoder
             Geometry = body?.geometry,
             ColorIndex = colorIndex,
             LineTypeScale = lineTypeScale,
+            IsModelSpace = isModelSpace,
         };
     }
 
