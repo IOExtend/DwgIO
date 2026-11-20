@@ -185,7 +185,7 @@ The documentation site with the API reference is at <https://ioextend.github.io/
 | AC1012 | R13 | flat section locators | planned |
 | AC1014 | R14 | flat section locators | planned |
 | AC1015 | R2000 | flat section locators | planned |
-| AC1018 | R2004 | paged, compressed sections | done |
+| AC1018 | R2004 | paged, compressed sections | done (implemented; not yet verified on a real drawing) |
 | AC1021 | R2007 | Reed-Solomon coded pages | planned |
 | AC1024 | R2010 | paged, compressed sections | done |
 | AC1027 | R2013 | paged, compressed sections | done |

@@ -178,9 +178,9 @@ public static class DwgJsonExporter
         writer.WriteNumber("count", document.Objects.Count);
         writer.WriteNumber("handleMapEntries", document.HandleMap?.Count ?? 0);
         writer.WriteStartObject("byType");
-        foreach (var group in document.Objects.GroupBy(o => o.TypeCode).OrderByDescending(g => g.Count()))
+        foreach (var group in document.Objects.GroupBy(o => o.TypeName).OrderByDescending(g => g.Count()))
         {
-            writer.WriteNumber(group.Key.ToString("X", System.Globalization.CultureInfo.InvariantCulture), group.Count());
+            writer.WriteNumber(group.Key, group.Count());
         }
 
         writer.WriteEndObject();

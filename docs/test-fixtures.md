@@ -17,7 +17,8 @@ of these folders together:
 - a folder `test_files` in the repository root (or in any parent of the test binary folder).
 
 Every `*.dwg` file directly in such a folder or in one level of subfolders is used, whatever its name. Drawings of the
-supported releases (AC1018, AC1024, AC1027, AC1032) are the useful ones. Drawings of an unsupported version
+supported releases (AC1024, AC1027, AC1032) are the useful ones; AC1018 (R2004) is implemented but no
+drawing of that release has been read yet, so an AC1018 fixture is especially valuable. Drawings of an unsupported version
 (AC1012 to AC1015, AC1021) are ignored by the fixture tests and counted in the skip reason, so one file of a
 planned release does not fail every test.
 

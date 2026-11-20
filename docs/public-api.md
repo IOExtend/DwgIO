@@ -24,6 +24,7 @@ change in any release and is visible only to the test project through `Internals
 | Type | Use |
 |---|---|
 | `DwgVersionInfo`, `DwgContainerFamily` | The release identified from the version magic (`Magic`, `Release`, `Year`, `Family`). |
+| `DwgObjectTypes` | The fixed object type codes: `Name(code)` (the AutoCAD or table name, `Class_502` for class-defined codes, `Object_XX` otherwise) and `IsEntity(code)`, per libredwg's dwg.h. |
 | `DwgFileHeader` | The 128-byte prefix shared by every version: `Version`, `MaintenanceVersion`, `PreviewOffset`, `Codepage`, `CodepageName`. |
 | `DwgContainerHeader` | The decrypted header of AutoCAD 2004 and later files: page and section map locations, `PageCount`, `GapCount`, `StoredCrc32` and `HeaderCrcValid`. |
 | `DwgSectionInfo` | One named section: `Name`, `Size`, `PageCount`, `MaxPageSize`, `Compression`, `Encryption`, `SectionId`. |
@@ -32,7 +33,7 @@ change in any release and is visible only to the test project through `Internals
 | `DwgFileDepList`, `DwgFileDependency` | External files the drawing refers to (fonts, images, references). |
 | `DwgPreview`, `DwgPreviewImageKind` | The embedded thumbnail and its format (BMP, PNG or WMF). |
 | `DwgHandleMap`, `DwgHandleMapEntry` | The handle to offset index of the object stream; `Find(handle)` looks up one object. |
-| `DwgObjectInfo`, `DwgHandle` | One record of the object stream: offset, size, type code and handle. |
+| `DwgObjectInfo`, `DwgHandle` | One record of the object stream: offset, size, type code (`TypeName` names it) and handle. |
 | `DwgEntity`, `DwgEntityKind` | A decoded entity: handle, type, colour, linetype scale and, for LINE, CIRCLE, ARC and POINT, its `Geometry`. |
 | `DwgAppInfoHistory` (list on `DwgDocument.AppInfoHistory`) | The producer records of the earlier saves, from `AcDb:AppInfoHistory` (best effort: the section's layout is undocumented, so the walk stops with a diagnostic where a record does not decode). |
 | `DwgRevHistory` | The save references of `AcDb:RevHistory`: layout version pair and one value per recorded save. |

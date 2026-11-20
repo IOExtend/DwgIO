@@ -3,7 +3,6 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using DwgIO;
-using DwgIO.Internal.Parsing;
 using DwgIO.Json;
 using DwgIO.Model;
 using DwgIO.Scene;
@@ -202,9 +201,9 @@ internal static class Program
         if (doc.Objects.Count > 0)
         {
             output.WriteLine($"Objects: {Count(doc.Objects.Count)}  (handle map: {Count(doc.HandleMap?.Count ?? 0)})");
-            foreach (var group in doc.Objects.GroupBy(o => o.TypeCode).OrderByDescending(g => g.Count()).Take(8))
+            foreach (var group in doc.Objects.GroupBy(o => o.TypeName).OrderByDescending(g => g.Count()).Take(8))
             {
-                output.WriteLine($"  type 0x{group.Key:X3}: {Count(group.Count())}");
+                output.WriteLine($"  {group.Key}: {Count(group.Count())}");
             }
         }
 
@@ -508,7 +507,7 @@ internal static class Program
                     continue;
                 }
 
-                if (!EntityDecoder.KnownTypeNames.Contains(trimmed))
+                if (!DwgObjectTypes.KnownNames.Contains(trimmed))
                 {
                     error.WriteLine($"error: unknown type '{trimmed}'. Known types include LINE, CIRCLE, ARC, POINT, TEXT and MTEXT.");
                     return ExitUsage;
