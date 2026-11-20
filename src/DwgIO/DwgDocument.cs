@@ -78,10 +78,8 @@ public sealed class DwgDocument
     /// <summary>Producer information from <c>AcDb:AppInfo</c>, when present.</summary>
     public DwgAppInfo? AppInfo { get; }
 
-    /// <summary>The producer records of the earlier saves of the drawing, from <c>AcDb:AppInfoHistory</c>,
-    /// when present (best effort: the section's layout is undocumented, so the walk stops with a diagnostic
-    /// where a record does not decode).</summary>
-    public IReadOnlyList<DwgAppInfo> AppInfoHistory { get; } = [];
+    /// <summary>The decompressed AcDb:AppInfoHistory payload when read. Its record layout is unknown.</summary>
+    public ReadOnlyMemory<byte> AppInfoHistory { get; }
 
     /// <summary>The save references of <c>AcDb:RevHistory</c>, when present.</summary>
     public DwgRevHistory? RevHistory { get; }
@@ -98,6 +96,8 @@ public sealed class DwgDocument
     /// <summary>Embedded thumbnail from <c>AcDb:Preview</c>, when present.</summary>
     public DwgPreview? Preview { get; }
 
+    internal string? PreviewReadError { get; private set; }
+
     /// <summary>Handle→offset index from <c>AcDb:Handles</c> (R2004-family files, ReadObjects on).</summary>
     public DwgHandleMap? HandleMap { get; }
 
@@ -111,7 +111,8 @@ public sealed class DwgDocument
     public IReadOnlyList<string> Diagnostics { get; } = [];
 
     /// <summary>Creates an in-memory document over a file header and a fixed entity list (tests).</summary>
-    internal DwgDocument(string path, DwgFileHeader fileHeader, IReadOnlyList<DwgEntity> entities, DwgPreview? preview = null)
+    internal DwgDocument(string path, DwgFileHeader fileHeader, IReadOnlyList<DwgEntity> entities,
+        DwgPreview? preview = null, IReadOnlyList<DwgObjectInfo>? objects = null)
     {
         Path = path;
         _fileBytes = [];
@@ -121,6 +122,7 @@ public sealed class DwgDocument
         Diagnostics = _diagnostics;
         Entities = entities;
         Preview = preview;
+        Objects = objects ?? [];
     }
 
     /// <summary>Creates a document over a container built in the tests; reads follow <paramref name="options"/>.</summary>
@@ -306,9 +308,13 @@ public sealed class DwgDocument
                 ? null
                 : HandleMap.Entries.Select(e => e.Offset).Distinct().OrderBy(o => o).ToList();
             var objects = ObjectStreamWalker.Walk(_objectStreamBytes, r2010Plus: FileHeader.Version.Year >= 2010, mapOffsets, _diagnostics.Add);
-            if (HandleMap is { Count: > 0 } map && objects.Count < map.Count)
+            if (HandleMap is { Count: > 0 } map)
             {
-                _diagnostics.Add($"AcDb:AcDbObjects: inventory holds {objects.Count} records; the handle map lists {map.Count} entries ({map.Count - objects.Count} unreached)");
+                int missing = CountUnreachedObjects(objects, map);
+                if (missing > 0)
+                {
+                    _diagnostics.Add($"AcDb:AcDbObjects: inventory holds {objects.Count} records; {missing} of {map.Count} handle-map entries were unreached");
+                }
             }
 
             return objects;
@@ -318,6 +324,12 @@ public sealed class DwgDocument
             _diagnostics.Add($"AcDb:AcDbObjects: {ex.Message}");
             return [];
         }
+    }
+
+    internal static int CountUnreachedObjects(IReadOnlyList<DwgObjectInfo> objects, DwgHandleMap map)
+    {
+        var reached = objects.Select(o => (o.Handle, (ulong)o.StreamOffset)).ToHashSet();
+        return map.Entries.Count(e => !reached.Contains((e.Handle, e.Offset)));
     }
 
     private List<DwgEntity> ReadOptionalEntities()
@@ -352,21 +364,21 @@ public sealed class DwgDocument
         return entities;
     }
 
-    private IReadOnlyList<DwgAppInfo> ReadAppInfoHistory()
+    private ReadOnlyMemory<byte> ReadAppInfoHistory()
     {
         if (!TryGetReadableSection("AcDb:AppInfoHistory", out var entry))
         {
-            return [];
+            return ReadOnlyMemory<byte>.Empty;
         }
 
         try
         {
-            return AppInfoHistoryParser.Parse(ReadSectionCore(entry), FileHeader.Codepage, _diagnostics.Add);
+            return ReadSectionCore(entry);
         }
         catch (Exception ex) when (IsParseFailure(ex))
         {
             _diagnostics.Add($"AcDb:AppInfoHistory: {ex.Message}");
-            return [];
+            return ReadOnlyMemory<byte>.Empty;
         }
     }
 
@@ -374,6 +386,10 @@ public sealed class DwgDocument
     {
         if (!TryGetReadableSection("AcDb:Preview", out var entry))
         {
+            if (entry is not null)
+            {
+                PreviewReadError = _diagnostics[^1];
+            }
             return null;
         }
 
@@ -385,7 +401,8 @@ public sealed class DwgDocument
         }
         catch (Exception ex) when (IsParseFailure(ex))
         {
-            _diagnostics.Add($"AcDb:Preview: {ex.Message}");
+            PreviewReadError = $"AcDb:Preview: {ex.Message}";
+            _diagnostics.Add(PreviewReadError);
             return null;
         }
     }

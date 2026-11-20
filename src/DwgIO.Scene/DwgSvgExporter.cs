@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Xml;
+using DwgIO.Internal;
 using DwgIO.Model;
 
 namespace DwgIO.Scene;
@@ -18,35 +19,7 @@ public static class DwgSvgExporter
     /// <summary>Writes the model space of <paramref name="document"/> to a new SVG file at <paramref name="path"/>.</summary>
     public static void WriteFile(DwgDocument document, string path, DwgSvgOptions? options = null)
     {
-        var fullPath = Path.GetFullPath(path);
-        var directory = Path.GetDirectoryName(fullPath) ?? Directory.GetCurrentDirectory();
-        var tempPath = Path.Combine(directory, $".dwgio-{Guid.NewGuid():N}.svg");
-        try
-        {
-            using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            {
-                Write(document, stream, options);
-            }
-
-            File.Move(tempPath, fullPath, overwrite: true);
-        }
-        catch
-        {
-            try
-            {
-                File.Delete(tempPath);
-            }
-            catch (IOException)
-            {
-                // Best-effort cleanup: the original export failure is the error worth reporting.
-            }
-            catch (UnauthorizedAccessException)
-            {
-                // Best-effort cleanup: the original export failure is the error worth reporting.
-            }
-
-            throw;
-        }
+        AtomicOutput.Write(path, stream => Write(document, stream, options));
     }
 
     /// <summary>Writes the model space of <paramref name="document"/> to a stream. The stream stays open.</summary>
@@ -67,15 +40,25 @@ public static class DwgSvgExporter
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(writer);
         options ??= new DwgSvgOptions();
-        if (options.Scale <= 0)
+        if (!double.IsFinite(options.Scale) || options.Scale <= 0)
         {
-            throw new ArgumentException("DwgSvgOptions.Scale must be positive.", nameof(options));
+            throw new ArgumentException("DwgSvgOptions.Scale must be finite and positive.", nameof(options));
+        }
+
+        if (!double.IsFinite(options.StrokeWidth) || options.StrokeWidth <= 0)
+        {
+            throw new ArgumentException("DwgSvgOptions.StrokeWidth must be finite and positive.", nameof(options));
         }
 
         var shapes = Collect(document, options.Scale);
         (double minX, double minY, double width, double height) = ViewBox(shapes);
         // Margins and markers are pixel values: they stay fixed while the scale zooms the drawing.
         double margin = Math.Max(0.02 * Math.Max(width, height), 8.0);
+        if (!IsUsable(minX - margin, minY - margin, width + 2 * margin, height + 2 * margin))
+        {
+            throw new ArgumentException("Drawing extents at this scale exceed the SVG coordinate range.", nameof(options));
+        }
+
         double markerRadius = Math.Max(0.015 * Math.Max(width, height), 3.0);
 
         writer.WriteStartDocument();
@@ -166,10 +149,15 @@ public static class DwgSvgExporter
         var shapes = new List<SvgShape>();
         foreach (var entity in document.Entities)
         {
+            if (!entity.IsModelSpace)
+            {
+                continue;
+            }
+
             switch (entity.Kind, entity.Geometry)
             {
                 case (DwgEntityKind.Line, [var x1, var y1, var z1, var x2, var y2, var z2]):
-                    if (IsUsable(x1, y1, x2, y2))
+                    if (IsUsable(x1 * scale, y1 * scale, x2 * scale, y2 * scale))
                     {
                         shapes.Add(new SvgLine(x1 * scale, -y1 * scale, x2 * scale, -y2 * scale, entity.ColorIndex));
                     }
@@ -180,7 +168,7 @@ public static class DwgSvgExporter
 
                     break;
                 case (DwgEntityKind.Circle, [var cx, var cy, var cz, var r]):
-                    if (IsUsable(cx, cy) && IsUsable(r) && r > 0)
+                    if (IsUsable((Math.Abs(cx) + r) * scale, (Math.Abs(cy) + r) * scale) && r > 0)
                     {
                         shapes.Add(new SvgCircle(cx * scale, -cy * scale, r * scale, entity.ColorIndex));
                     }
@@ -191,9 +179,12 @@ public static class DwgSvgExporter
 
                     break;
                 case (DwgEntityKind.Arc, [var cx, var cy, _, var r, var start, var end]):
-                    if (IsUsable(cx, cy) && IsUsable(r, start, end) && r > 0)
+                    if (IsUsable((Math.Abs(cx) + r) * scale, (Math.Abs(cy) + r) * scale, start, end) && r > 0)
                     {
-                        shapes.Add(ArcShape(cx * scale, -cy * scale, r * scale, start, end, entity.ColorIndex));
+                        var (arcStart, span) = ArcAngles.Normalize(start, end);
+                        shapes.Add(span == Math.Tau
+                            ? new SvgCircle(cx * scale, -cy * scale, r * scale, entity.ColorIndex)
+                            : new SvgArc(cx * scale, -cy * scale, r * scale, arcStart, span, entity.ColorIndex));
                     }
                     else
                     {
@@ -202,7 +193,7 @@ public static class DwgSvgExporter
 
                     break;
                 case (DwgEntityKind.Point, [var x, var y, _]):
-                    if (IsUsable(x, y))
+                    if (IsUsable(x * scale, y * scale))
                     {
                         shapes.Add(new SvgPoint(x * scale, -y * scale, entity.ColorIndex));
                     }
@@ -222,18 +213,6 @@ public static class DwgSvgExporter
         document.ReportDiagnostic($"svg: entity {entity.Handle:X} ({entity.TypeName}) skipped: {reason}");
 
     private static bool IsUsable(params double[] values) => values.All(double.IsFinite);
-
-    private static SvgArc ArcShape(double cx, double cy, double radius, double start, double end, int colorIndex)
-    {
-        double span = end - start;
-        while (span <= 0)
-        {
-            // AutoCAD draws an arc with equal start and end angles as a full circle.
-            span += 2.0 * Math.PI;
-        }
-
-        return new SvgArc(cx, cy, radius, start, span, colorIndex);
-    }
 
     private static (double X1, double Y1, double X2, double Y2) ArcEndpoints(SvgArc arc) =>
         (
@@ -268,12 +247,7 @@ public static class DwgSvgExporter
                     for (int k = 0; k < 4; k++)
                     {
                         double angle = k * Math.PI / 2.0;
-                        while (angle < arc.Start)
-                        {
-                            angle += 2.0 * Math.PI;
-                        }
-
-                        if (angle <= arc.Start + arc.Span)
+                        if (ArcAngles.PositiveAngle(angle - arc.Start) <= arc.Span)
                         {
                             Expand(arc.Cx + arc.Radius * Math.Cos(angle), -Math.Sin(angle) * arc.Radius + arc.Cy);
                         }
