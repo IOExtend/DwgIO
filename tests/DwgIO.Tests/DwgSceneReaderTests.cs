@@ -176,6 +176,17 @@ public class DwgSceneReaderTests
     }
 
     [Fact]
+    public void Read_ArcWithInvalidAnglesReturnsWithoutGeometry()
+    {
+        var document = CreateDocument(Entity(1, DwgEntityKind.Arc, "ARC", [0, 0, 0, 5, double.PositiveInfinity, 0]));
+
+        var result = DwgSceneReader.Read(document, new DwgSceneOptions { ModelKey = "synthetic" });
+
+        Assert.Empty(result.Document.Geometries);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == "non-finite-geometry");
+    }
+
+    [Fact]
     public void Read_NonFiniteGeometry_DropsGeometryAndReports()
     {
         var document = CreateDocument(Entity(0x2A, DwgEntityKind.Line, "LINE", [0.0, 0.0, 0.0, double.NaN, 0.0, 0.0]));

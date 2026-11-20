@@ -12,7 +12,7 @@ change in any release and is visible only to the test project through `Internals
 
 | Type | Use |
 |---|---|
-| `DwgDocument` | Opens a drawing (`Open`) and gives its version, file and container headers, section catalog, metadata, handle map, object inventory, entities and `Diagnostics`. `ReadSection(name)` returns the decompressed bytes of one named section. |
+| `DwgDocument` | Opens a drawing (`Open(path, options?)` or `Open(stream, documentName?, options?)`) and gives its version, file and container headers, section catalog, metadata, handle map, object inventory, entities and `Diagnostics`. `ReadSection(name)` returns the decompressed bytes of one named section. |
 | `DwgReaderOptions` | What `Open` reads: `ReadSectionMap`, `ReadSummaryInfo`, `ReadMetadata`, `ReadObjects`, `ReadEntities` (all on by default) and `VerifyChecksums` (off by default). |
 | `DwgException` | Thrown for a damaged or truncated file, and by `ReadSection` for an unknown section name, a document opened without its section map, or a checksum mismatch when `VerifyChecksums` is on. |
 | `DwgUnsupportedVersionException` | Thrown when the version is not recognised or its container is not implemented yet (R13 to R2000, R2007). Derives from `DwgException`. |
@@ -24,6 +24,7 @@ change in any release and is visible only to the test project through `Internals
 | Type | Use |
 |---|---|
 | `DwgVersionInfo`, `DwgContainerFamily` | The release identified from the version magic (`Magic`, `Release`, `Year`, `Family`). |
+| `DwgObjectTypes` | The fixed object type codes: `Name(code)` (the AutoCAD or table name, `Class_502` for class-defined codes, `Object_XX` otherwise) and `IsEntity(code)`, per libredwg's dwg.h. |
 | `DwgFileHeader` | The 128-byte prefix shared by every version: `Version`, `MaintenanceVersion`, `PreviewOffset`, `Codepage`, `CodepageName`. |
 | `DwgContainerHeader` | The decrypted header of AutoCAD 2004 and later files: page and section map locations, `PageCount`, `GapCount`, `StoredCrc32` and `HeaderCrcValid`. |
 | `DwgSectionInfo` | One named section: `Name`, `Size`, `PageCount`, `MaxPageSize`, `Compression`, `Encryption`, `SectionId`. |
@@ -32,9 +33,9 @@ change in any release and is visible only to the test project through `Internals
 | `DwgFileDepList`, `DwgFileDependency` | External files the drawing refers to (fonts, images, references). |
 | `DwgPreview`, `DwgPreviewImageKind` | The embedded thumbnail and its format (BMP, PNG or WMF). |
 | `DwgHandleMap`, `DwgHandleMapEntry` | The handle to offset index of the object stream; `Find(handle)` looks up one object. |
-| `DwgObjectInfo`, `DwgHandle` | One record of the object stream: offset, size, type code and handle. |
+| `DwgObjectInfo`, `DwgHandle` | One record of the object stream: offset, size, type code (`TypeName` names it) and handle. |
 | `DwgEntity`, `DwgEntityKind` | A decoded entity: handle, type, colour, linetype scale and, for LINE, CIRCLE, ARC and POINT, its `Geometry`. |
-| `DwgAppInfoHistory` (list on `DwgDocument.AppInfoHistory`) | The producer records of the earlier saves, from `AcDb:AppInfoHistory` (best effort: the section's layout is undocumented, so the walk stops with a diagnostic where a record does not decode). |
+| `DwgDocument.AppInfoHistory` | Decompressed bytes of `AcDb:AppInfoHistory` when available. The record layout is unknown. |
 | `DwgRevHistory` | The save references of `AcDb:RevHistory`: layout version pair and one value per recorded save. |
 | `DwgAuxHeader` | The auxiliary header of `AcDb:AuxHeader`: version pair, save counter, creation and last-update times, next handle. |
 | `DwgTemplate` | The template description of `AcDb:Template`: description and unit system (English/metric). |
@@ -56,7 +57,8 @@ DwgJsonExporter.WriteFile(doc, "drawing.json", DwgJsonExportOptions.Default);
 
 The export has the objects `file`, `version`, `containerHeader`, `summaryInfo`, `appInfo`, `preview`, `fileDepList`
 and `objects`, the numbers `pageCount` and `entityCount`, the `entities` array and the `sections` array. An object whose data the drawing does not hold is left
-out.
+out. In `objects`, `byType` keeps hexadecimal keys and `byTypeName` gives the same counts by readable name.
+For `appInfoHistory`, the export reports the byte size. Section bytes can be embedded with `IncludeSectionContents`.
 
 ## Scene export (`DwgIO.Scene` package)
 
@@ -81,7 +83,9 @@ IOScene.SceneJson.Save(result.Document, "drawing.scene.json");
 ```
 
 The scene validates against the IOScene contract (`SceneDocument.Validate` reports no error) and round-trips through
-the IOScene JSON format, so it can be fed to the IOScene tools, viewers and exporters. `DwgSceneExport` writes it to
+the IOScene JSON format, so it can be fed to the IOScene tools, viewers and exporters. For HTML display, IOViewer
+0.3.1 represents lines and points with thin triangle geometry. The scene and exchange exports retain the original
+line and point geometry. `DwgSceneExport` writes it to
 OBJ (with an MTL colour library) and GLB through the IOScene.Formats writers.
 
 ## Diagnostics

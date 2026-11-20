@@ -7,11 +7,20 @@ API between minor releases.
 ## [Unreleased]
 
 ### Added
-- `AcDb:AppInfoHistory`, `AcDb:RevHistory`, `AcDb:AuxHeader` and `AcDb:Template` parsing: the earlier saves'
-  producer records (best effort, the section's layout is undocumented), the save references, the auxiliary
-  header (save counter, drawing times, next handle) and the template description with its unit system. Each is
-  exposed on `DwgDocument`, written to the JSON export and summarised by `dwgio inspect`; truncated input
-  produces a diagnostic (#36).
+- CI runs the tests on Linux and macOS as well as Windows (both target frameworks), replacing the Linux
+  build-only job (#34).
+- `test-files/public`: the folder for committed redistributable test drawings, with the origin and licence
+  recorded next to each file; the fixture search includes it, so a committed drawing turns the skipped
+  fixture tests into real runs in CI (#33, infrastructure — the drawings themselves follow).
+- `DwgDocument.Open(Stream, documentName?, options?)`: a drawing can now come from a stream (a network
+  handle, an archive entry, an already-open file). The stream is read to memory once, so the results are
+  identical to `Open(path)` on the same bytes; the unsupported-version message names the source (#37, first
+  step — reading data pages on demand remains open).
+- `AcDb:RevHistory`, `AcDb:AuxHeader` and `AcDb:Template` parsing exposes the revision values, auxiliary
+  header and template description on `DwgDocument`, in JSON and in `dwgio inspect`. The undecoded
+  `AcDb:AppInfoHistory` section is exposed as decompressed bytes, with its size in JSON and CLI output (#36).
+- Fixed object type names are available in `DwgObjectInfo.TypeName`, `dwgio inspect` and the JSON
+  `objects.byTypeName` field. Existing `objects.byType` keys are preserved (#20, fixed types only).
 - `dwgio --version` and `--help` (and `-v`/`-h`) print the version and the usage with exit code 0; an unknown
   option still exits 1 (#18).
 - `dwgio entities <file.dwg> [--type LINE,CIRCLE] [--json]` lists decoded entities one line each or as a JSON

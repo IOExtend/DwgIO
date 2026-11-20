@@ -1,3 +1,4 @@
+using System.Text.Json;
 using DwgIO.Model;
 using DwgIO.Scene;
 using Xunit;
@@ -61,6 +62,14 @@ public class DwgViewerExportTests : IDisposable
             Kind = DwgEntityKind.Circle,
             Geometry = [5.0, 0.0, 0.0, 5.0],
             ColorIndex = 40,
+        },
+        new DwgEntity
+        {
+            Handle = 0x2C,
+            TypeCode = 0x1B,
+            TypeName = "POINT",
+            Kind = DwgEntityKind.Point,
+            Geometry = [2.0, 3.0, 0.0],
         });
 
     [Fact]
@@ -72,7 +81,9 @@ public class DwgViewerExportTests : IDisposable
 
         var result = DwgViewerExport.SaveViewer(SampleDrawing(), htmlPath);
 
-        Assert.Equal(2, result.ElementCount);
+        Assert.Equal(3, result.ElementCount);
+        Assert.Contains(result.Document.Geometries, geometry => geometry.Topology == IOScene.SceneTopology.Lines);
+        Assert.Contains(result.Document.Geometries, geometry => geometry.Topology == IOScene.SceneTopology.Points);
         string html = File.ReadAllText(htmlPath);
         // A standalone viewer: the WebGL runtime is embedded, no external script or stylesheet is referenced.
         Assert.Contains("<!DOCTYPE html>", html, StringComparison.OrdinalIgnoreCase);
@@ -81,6 +92,10 @@ public class DwgViewerExportTests : IDisposable
         Assert.DoesNotContain("<link rel=\"stylesheet\" href=\"http", html, StringComparison.OrdinalIgnoreCase);
         // The scene payload is embedded in script elements of the viewer runtime; no external file is needed.
         Assert.Contains("id=\"ioviewer-meta\"", html, StringComparison.Ordinal);
+        int metaStart = html.IndexOf('>', html.IndexOf("id=\"ioviewer-meta\"", StringComparison.Ordinal)) + 1;
+        int metaEnd = html.IndexOf("</script>", metaStart, StringComparison.Ordinal);
+        using var metadata = JsonDocument.Parse(html[metaStart..metaEnd]);
+        Assert.Equal(3, metadata.RootElement.GetProperty("geometries").GetArrayLength());
         Assert.Contains("id=\"ioviewer-bin\"", html, StringComparison.Ordinal);
     }
 

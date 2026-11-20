@@ -93,10 +93,9 @@ public class HistorySectionsTests
         Assert.Equal(0x2Bul, aux.Handseed);
         Assert.Equal(2460311u, aux.CreatedRaw.JulianDay);
         Assert.Equal(43200000u, aux.CreatedRaw.Milliseconds);
-        Assert.NotNull(aux.CreatedUtc);
-        Assert.InRange(aux.CreatedUtc!.Value.Year, 2020, 2030);
-        Assert.NotNull(aux.ModifiedUtc);
-        Assert.InRange(aux.ModifiedUtc!.Value.Year, 2020, 2030);
+        var midnight = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        Assert.Equal(midnight.AddHours(12), aux.CreatedUtc);
+        Assert.Equal(midnight.AddDays(1).AddMilliseconds(-1), aux.ModifiedUtc);
     }
 
     [Fact]
@@ -126,67 +125,11 @@ public class HistorySectionsTests
         Assert.Throws<DwgException>(() => AuxHeaderParser.Parse(new byte[50]));
     }
 
-    // ------------------------------------------------------------------ AppInfoHistory
-
-    [Fact]
-    public void AppInfoHistory_WalksTheRecordSequence()
-    {
-        var data = new List<byte>();
-        WriteAnsiAppInfo(data, "AppInfoDataList", "1.0", "First");
-        WriteAnsiAppInfo(data, "AppInfoDataList", "2.0", "Second");
-
-        var diagnostics = new List<string>();
-        var records = AppInfoHistoryParser.Parse([.. data], 30, diagnostics.Add);
-
-        Assert.Equal(2, records.Count);
-        Assert.Equal("1.0", records[0].Version);
-        Assert.Equal("2.0", records[1].Version);
-        Assert.Empty(diagnostics);
-    }
-
-    [Fact]
-    public void AppInfoHistory_TruncatedTail_IsReported()
-    {
-        var data = new List<byte>();
-        WriteAnsiAppInfo(data, "AppInfoDataList", "1.0", "First");
-        data.AddRange([0x00, 0x00]); // two trailing bytes: too small for a record
-
-        var diagnostics = new List<string>();
-        var records = AppInfoHistoryParser.Parse([.. data], 30, diagnostics.Add);
-
-        Assert.Single(records);
-        Assert.Contains(diagnostics, d => d.Contains("too small for a record", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void AppInfoHistory_BrokenRecord_IsReported()
-    {
-        var data = new List<byte>();
-        WriteAnsiAppInfo(data, "AppInfoDataList", "1.0", "First");
-        // A record whose string runs past the payload.
-        data.AddRange([0x20, 0x00, (byte)'x', (byte)'y']);
-
-        var diagnostics = new List<string>();
-        var records = AppInfoHistoryParser.Parse([.. data], 30, diagnostics.Add);
-
-        Assert.Single(records);
-        Assert.Contains(diagnostics, d => d.Contains("does not decode", StringComparison.Ordinal));
-    }
-
     private static void WriteAnsiString16(List<byte> data, string text)
     {
         var bytes = System.Text.Encoding.ASCII.GetBytes(text);
         data.AddRange([(byte)(bytes.Length + 1), 0x00]);
         data.AddRange(bytes);
         data.Add(0);
-    }
-
-    private static void WriteAnsiAppInfo(List<byte> data, string name, string version, string product)
-    {
-        WriteAnsiString16(data, name);
-        data.AddRange([0x00, 0x00, 0x00, 0x00]); // u32 marker/unknown word
-        WriteAnsiString16(data, string.Empty);
-        WriteAnsiString16(data, $"<ProductInformation name=\"{product}\" build_version=\"{version}\"/>");
-        WriteAnsiString16(data, version);
     }
 }

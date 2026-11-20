@@ -7,7 +7,9 @@ namespace DwgIO.Tests;
 /// <summary>A section map with an encrypted entry: the section is skipped with a diagnostic, not silently (#38).</summary>
 public class EncryptedSectionTests
 {
-    private static DwgDocument CreateDocument(params SectionEntry[] entries)
+    private static DwgDocument CreateDocument(params SectionEntry[] entries) => CreateDocument(readMetadata: false, entries);
+
+    private static DwgDocument CreateDocument(bool readMetadata, params SectionEntry[] entries)
     {
         var container = new R2004Container
         {
@@ -52,7 +54,7 @@ public class EncryptedSectionTests
                 PreviewOffset = 0,
                 Codepage = 30,
             },
-            new DwgReaderOptions { ReadSummaryInfo = false, ReadMetadata = false, ReadObjects = false });
+            new DwgReaderOptions { ReadSummaryInfo = false, ReadMetadata = readMetadata, ReadObjects = false });
         return document;
     }
 
@@ -68,6 +70,20 @@ public class EncryptedSectionTests
         Pages = [new PageRef { PageNumber = 1, DataSize = 0, StartOffset = 0 }],
     };
 
+
+    [Theory]
+    [InlineData(0u)]
+    [InlineData(1u)]
+    public void PreviewCommand_WhenSectionCannotBeRead_ReturnsParseError(uint encryption)
+    {
+        var document = CreateDocument(readMetadata: true, Section("AcDb:Preview", encryption));
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        Assert.Equal(4, Cli.Program.PreviewDocument(document, "unused", output, error));
+        Assert.Contains("AcDb:Preview:", error.ToString(), StringComparison.Ordinal);
+        Assert.Empty(output.ToString());
+    }
 
     [Fact]
     public void TryGetReadableSection_EncryptedEntry_IsSkippedWithADiagnostic()

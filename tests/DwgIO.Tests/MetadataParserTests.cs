@@ -156,6 +156,18 @@ public class MetadataParserTests
         Assert.Equal("AutoCAD", appInfo.Product);
     }
 
+    [Theory]
+    [InlineData("<ProductInformation name = \"AutoCAD\"/>", "AutoCAD")]
+    [InlineData("<ProductInformation name='AutoCAD LT'/>", "AutoCAD LT")]
+    [InlineData("<ProductInformation comment=\" name='other' \" name='A &amp; B'/>", "A & B")]
+    [InlineData("<ProductInformation name=\\\"Writer\\\"/>", "Writer")]
+    public void AppInfo_Product_HandlesXmlAttributeForms(string xml, string expected)
+    {
+        var data = BuildUnicodeAppInfo("AppInfoDataList", (ProductXmlEntryId, xml));
+
+        Assert.Equal(expected, AppInfoParser.Parse(data, 30).Product);
+    }
+
     [Fact]
     public void AppInfo_Product_IsEmptyWithoutANameAttribute()
     {
