@@ -118,6 +118,28 @@ public class CliEntitiesTests
         Assert.Contains("unknown type 'WEDGE'", error.ToString(), StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("--bogus")]
+    [InlineData("-z")]
+    public void Entities_UnknownOption_ReturnsUsage(string option)
+    {
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        Assert.Equal(1, Program.Run(["entities", option], output, error));
+        Assert.Contains("unknown option", error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Entities_EmptyTypeFilter_ReturnsUsage()
+    {
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        Assert.Equal(1, Program.Run(["entities", "drawing.dwg", "--type", ", "], output, error));
+        Assert.Contains("at least one type", error.ToString(), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void EntitiesDocument_Json_WritesAnArrayOfEntities()
     {

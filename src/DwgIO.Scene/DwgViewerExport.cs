@@ -1,4 +1,5 @@
 using IOViewer.Exporters;
+using DwgIO.Internal;
 using IOScene;
 
 namespace DwgIO.Scene;
@@ -38,8 +39,6 @@ public static class DwgViewerExport
         ArgumentException.ThrowIfNullOrEmpty(htmlPath);
         if (viewerOptions is null)
         {
-            // Default options take their title from the scene; a caller's options are respected as given,
-            // with an empty title filled from the scene.
             viewerOptions = new HtmlViewerOptions { Title = scene.Title };
         }
         else if (string.IsNullOrEmpty(viewerOptions.Title))
@@ -47,7 +46,8 @@ public static class DwgViewerExport
             viewerOptions.Title = scene.Title;
         }
 
-        HtmlViewerExporter.Save(scene, htmlPath, viewerOptions);
+        var drawableScene = ViewerMeshGeometry.Adapt(scene);
+        AtomicOutput.Write(htmlPath, stream => HtmlViewerExporter.Export(drawableScene, stream, viewerOptions));
     }
 
     private static DwgSceneOptions ViewerOptionsFor(DwgDocument document, string path, DwgSceneOptions? options)

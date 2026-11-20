@@ -99,22 +99,19 @@ public class OpenStreamTests
     private static string Core(string message) => message[(message.IndexOf(": ", StringComparison.Ordinal) + 2)..];
 
     [SkippableFact]
-    public void Open_Stream_MatchesPath_OnEveryAvailableDrawing()
+    public void Open_Stream_MatchesPath_OnEveryAvailableDrawing() => DwgFixtureTests.CheckAll(path =>
     {
-        // The same-results gate of #37; runs when private drawings are available (see docs/test-fixtures.md).
-        foreach (string path in TestFiles.DwgFiles())
-        {
-            var fromPath = DwgDocument.Open(path, new DwgReaderOptions { ReadObjects = true });
-            byte[] bytes = File.ReadAllBytes(path);
-            using var stream = new MemoryStream(bytes);
-            var fromStream = DwgDocument.Open(stream, Path.GetFileName(path), new DwgReaderOptions { ReadObjects = true });
+        var fromPath = DwgDocument.Open(path);
+        using var stream = File.OpenRead(path);
+        var fromStream = DwgDocument.Open(stream, path);
+        using var fileJson = new MemoryStream();
+        using var streamJson = new MemoryStream();
+        Json.DwgJsonExporter.Write(fromPath, fileJson, Json.DwgJsonExportOptions.Default);
+        Json.DwgJsonExporter.Write(fromStream, streamJson, Json.DwgJsonExportOptions.Default);
 
-            Assert.Equal(fromPath.Version.Magic, fromStream.Version.Magic);
-            Assert.Equal(fromPath.FileSize, fromStream.FileSize);
-            Assert.Equal(fromPath.Sections.Count, fromStream.Sections.Count);
-            Assert.Equal(fromPath.Objects.Count, fromStream.Objects.Count);
-            Assert.Equal(fromPath.Entities.Count, fromStream.Entities.Count);
-            Assert.Equal(fromPath.Diagnostics.Count, fromStream.Diagnostics.Count);
-        }
-    }
+        Assert.Equal(fromPath.Diagnostics, fromStream.Diagnostics);
+        Assert.True(fileJson.GetBuffer().AsSpan(0, (int)fileJson.Length)
+            .SequenceEqual(streamJson.GetBuffer().AsSpan(0, (int)streamJson.Length)));
+        return true;
+    }, "a readable container");
 }

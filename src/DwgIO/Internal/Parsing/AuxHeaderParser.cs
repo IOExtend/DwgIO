@@ -22,17 +22,19 @@ internal static class AuxHeaderParser
 
         var bytes = (byte[])data.Clone();
         NormaliseR2018(bytes, data.Length);
+        var created = ReadTime(bytes, 63);
+        var modified = ReadTime(bytes, 71);
         return new DwgAuxHeader
         {
             Intro = [bytes[0], bytes[1], bytes[2]],
             DwgVersion = ReadU16(bytes, 3),
             MaintVersion = ReadU16(bytes, 5),
             Numsaves = ReadU32(bytes, 7),
-            CreatedRaw = ReadTime(bytes, 63),
-            ModifiedRaw = ReadTime(bytes, 71),
+            CreatedRaw = created,
+            ModifiedRaw = modified,
             Handseed = ReadU64(bytes, 79),
-            CreatedUtc = ToUtc(ReadTime(bytes, 63)),
-            ModifiedUtc = ToUtc(ReadTime(bytes, 71)),
+            CreatedUtc = ToUtc(created),
+            ModifiedUtc = ToUtc(modified),
         };
     }
 
@@ -66,15 +68,8 @@ internal static class AuxHeaderParser
 
     private static (uint, uint) ReadTime(byte[] b, int pos) => (ReadU32(b, pos), ReadU32(b, pos + 4));
 
-    /// <summary>Converts the stored Julian day and millisecond pair to UTC (JD 2440587.5 is 1970-01-01T00:00Z).</summary>
-    private static DateTime? ToUtc((uint JulianDay, uint Milliseconds) time)
-    {
-        double seconds = (time.JulianDay - 2440587.5) * 86400.0 + time.Milliseconds / 1000.0;
-        if (time.JulianDay == 0 || seconds is < 0 or > 4_000_000_000)
-        {
-            return null;
-        }
-
-        return DateTime.UnixEpoch.AddSeconds(seconds);
-    }
+    private static DateTime? ToUtc((uint JulianDay, uint Milliseconds) time) =>
+        SummaryInfoParser.ToDateTimeUtc(time.JulianDay, time.Milliseconds) is long ticks
+            ? new DateTime(ticks, DateTimeKind.Utc)
+            : null;
 }
