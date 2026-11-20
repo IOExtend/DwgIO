@@ -103,6 +103,12 @@ public static class DwgSceneReader
             };
             scene.Elements.Add(element);
 
+            if (entity.Geometry is { } coordinates && !coordinates.All(double.IsFinite))
+            {
+                nonFinite++;
+                continue;
+            }
+
             Vector3d[]? vertices = entity.Kind switch
             {
                 DwgEntityKind.Line when entity.Geometry is { Length: 6 } g => LineVertices(g, metresPerUnit),
@@ -231,12 +237,7 @@ public static class DwgSceneReader
     {
         double cx = g[0] * scale, cy = g[1] * scale, cz = g[2] * scale;
         double radius = g[3] * scale;
-        double start = g[4];
-        double span = g[5] - g[4];
-        while (span <= 0)
-        {
-            span += 2.0 * Math.PI;
-        }
+        var (start, span) = ArcAngles.Normalize(g[4], g[5]);
 
         int segments = Math.Clamp((int)Math.Ceiling(span / ArcRadiansPerSegment), MinArcSegments, CircleSegments * 4);
         var vertices = new Vector3d[segments + 1];

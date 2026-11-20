@@ -14,7 +14,8 @@ public sealed class DwgAppInfo
     /// <summary>Free-form comment string (AC1021+ files; usually a producer notice).</summary>
     public string Comment { get; init; } = string.Empty;
 
-    /// <summary>Free-form product string; not filled by the current parsers.</summary>
+    /// <summary>The product named by the product XML's <c>name</c> attribute (e.g. "AutoCAD", "AutoCAD LT",
+    /// "Teigha(R)"); empty when the XML is absent or carries no name.</summary>
     public string Product { get; init; } = string.Empty;
 
     /// <summary>XML product blob (ProductInformation element), present in both layouts.</summary>
