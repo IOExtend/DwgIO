@@ -64,8 +64,9 @@ public class JsonExporterTests
         var document = CreateDocument(CreateEntity(
             [double.NaN, double.PositiveInfinity, 1.5, double.NegativeInfinity, -2.25, 0.0]));
 
+        var diagnostics = new List<string>();
         using var stream = new MemoryStream();
-        DwgJsonExporter.Write(document, stream, DwgJsonExportOptions.Default);
+        DwgJsonExporter.Write(document, stream, new DwgJsonExportOptions { ReportDiagnostic = diagnostics.Add });
 
         using var json = JsonDocument.Parse(stream.ToArray());
         var geometry = json.RootElement.GetProperty("entities")[0].GetProperty("geometry");
@@ -75,7 +76,9 @@ public class JsonExporterTests
         Assert.Equal(JsonValueKind.Null, geometry[3].ValueKind);
         Assert.Equal(-2.25, geometry[4].GetDouble());
         Assert.Equal(0.0, geometry[5].GetDouble());
-        Assert.Contains(document.Diagnostics, d => d.StartsWith("entity 2A:", StringComparison.Ordinal));
+        var diagnostic = Assert.Single(diagnostics);
+        Assert.StartsWith("entity 2A:", diagnostic, StringComparison.Ordinal);
+        Assert.Empty(document.Diagnostics);
     }
 
     [Fact]

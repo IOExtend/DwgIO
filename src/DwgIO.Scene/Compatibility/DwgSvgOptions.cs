@@ -16,4 +16,7 @@ public sealed class DwgSvgOptions
     /// <summary>Background colour, as CSS. AutoCAD renders on a dark background, but SVG files are usually
     /// viewed on light ones, so the default is white and colour 7 (white/black) renders black.</summary>
     public string Background { get; set; } = "white";
+
+    /// <summary>Optional receiver for skipped-entity warnings.</summary>
+    public Action<string>? ReportDiagnostic { get; set; }
 }

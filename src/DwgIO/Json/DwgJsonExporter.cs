@@ -1,10 +1,9 @@
-using DwgIO.Internal;
 using System.Text.Json;
 
 namespace DwgIO.Json;
 
 /// <summary>Writes a parsed <see cref="DwgDocument"/> to JSON.</summary>
-public static class DwgJsonExporter
+public static partial class DwgJsonExporter
 {
     /// <summary>Writes <paramref name="document"/> as JSON to <paramref name="output"/>.</summary>
     public static void Write(DwgDocument document, Stream output, DwgJsonExportOptions options)
@@ -211,7 +210,7 @@ public static class DwgJsonExporter
                 writer.WriteEndArray();
                 if (nonFiniteValues > 0)
                 {
-                    document.ReportDiagnostic(
+                    options.ReportDiagnostic?.Invoke(
                         $"entity {entity.Handle:X}: {nonFiniteValues} non-finite geometry value(s) written as null");
                 }
             }
@@ -234,16 +233,17 @@ public static class DwgJsonExporter
             writer.WriteNumber("compression", section.Compression);
             writer.WriteNumber("encryption", section.Encryption);
             writer.WriteNumber("sectionId", section.SectionId);
-            if (options.IncludeSectionContents && IsIncluded(document, section.Name, options))
+            if (options.IncludeSectionContents && IsIncluded(section.Name, options))
             {
                 try
                 {
-                    var bytes = document.ReadSection(section.Name);
+                    var bytes = document.ReadSection(section.Name, options.ReportDiagnostic);
                     writer.WriteString("contentBase64", Convert.ToBase64String(bytes));
                 }
                 catch (DwgException ex)
                 {
                     writer.WriteString("readError", ex.Message);
+                    options.ReportDiagnostic?.Invoke($"{section.Name}: {ex.Message}");
                 }
             }
 
@@ -255,12 +255,6 @@ public static class DwgJsonExporter
         writer.Flush();
     }
 
-    /// <summary>Writes <paramref name="document"/> as JSON to a new file at <paramref name="path"/>.</summary>
-    public static void WriteFile(DwgDocument document, string path, DwgJsonExportOptions options)
-    {
-        AtomicOutput.Write(path, stream => Write(document, stream, options));
-    }
-
-    private static bool IsIncluded(DwgDocument document, string name, DwgJsonExportOptions options) =>
+    private static bool IsIncluded(string name, DwgJsonExportOptions options) =>
         options.SectionsToInclude.Count == 0 || options.SectionsToInclude.Contains(name);
 }

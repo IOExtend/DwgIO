@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="src/DwgIO/DwgIO.csproj" />
+  <Project Path="src/DwgIO.Scene.Adapter/DwgIO.Scene.Adapter.csproj" />
   <Project Path="src/DwgIO.Scene/DwgIO.Scene.csproj" />
   <Project Path="src/DwgIO.Cli/DwgIO.Cli.csproj" />
   <Project Path="tests/DwgIO.Tests/DwgIO.Tests.csproj" />

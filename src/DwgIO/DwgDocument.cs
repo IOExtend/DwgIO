@@ -96,7 +96,8 @@ public sealed class DwgDocument
     /// <summary>Embedded thumbnail from <c>AcDb:Preview</c>, when present.</summary>
     public DwgPreview? Preview { get; }
 
-    internal string? PreviewReadError { get; private set; }
+    /// <summary>Reason the thumbnail section could not be read, when reading it failed.</summary>
+    public string? PreviewReadError { get; private set; }
 
     /// <summary>Handle→offset index from <c>AcDb:Handles</c> (R2004-family files, ReadObjects on).</summary>
     public DwgHandleMap? HandleMap { get; }
@@ -107,12 +108,12 @@ public sealed class DwgDocument
     /// <summary>Decoded entities with geometry (LINE/CIRCLE/ARC/POINT) — requires ReadObjects.</summary>
     public IReadOnlyList<DwgEntity> Entities { get; } = [];
 
-    /// <summary>Best-effort parse failures collected while opening (section name → message).</summary>
+    /// <summary>Read diagnostics from opening the document and from explicit calls to <see cref="ReadSection(string)"/>.</summary>
     public IReadOnlyList<string> Diagnostics { get; } = [];
 
     /// <summary>Creates an in-memory document over a file header and a fixed entity list (tests).</summary>
     internal DwgDocument(string path, DwgFileHeader fileHeader, IReadOnlyList<DwgEntity> entities,
-        DwgPreview? preview = null, IReadOnlyList<DwgObjectInfo>? objects = null)
+        DwgPreview? preview = null, IReadOnlyList<DwgObjectInfo>? objects = null, IEnumerable<string>? diagnostics = null)
     {
         Path = path;
         _fileBytes = [];
@@ -123,6 +124,7 @@ public sealed class DwgDocument
         Entities = entities;
         Preview = preview;
         Objects = objects ?? [];
+        _diagnostics.AddRange(diagnostics ?? []);
     }
 
     /// <summary>Creates a document over a container built in the tests; reads follow <paramref name="options"/>.</summary>
@@ -130,9 +132,6 @@ public sealed class DwgDocument
         : this(path, [], fileHeader, container, options)
     {
     }
-
-    /// <summary>Records a non-fatal problem found after the document was opened (e.g. by an exporter).</summary>
-    internal void ReportDiagnostic(string message) => _diagnostics.Add(message);
 
     /// <summary>Opens and parses a DWG file.</summary>
     /// <exception cref="FileNotFoundException">The file does not exist.</exception>
@@ -222,7 +221,9 @@ public sealed class DwgDocument
     /// <summary>
     /// Reads and decompresses a named section (e.g. <c>"AcDb:Header"</c>, <c>"AcDb:SummaryInfo"</c>).
     /// </summary>
-    public byte[] ReadSection(string name)
+    public byte[] ReadSection(string name) => ReadSection(name, _diagnostics.Add);
+
+    internal byte[] ReadSection(string name, Action<string>? reportDiagnostic)
     {
         var container = _container
             ?? throw new DwgException("The document was opened without its section map (ReadSectionMap = false).");
@@ -230,7 +231,7 @@ public sealed class DwgDocument
             ?? throw new DwgException($"Section '{name}' not found. Available: {string.Join(", ", container.SectionMap.Sections.Select(s => s.Name))}");
         try
         {
-            return container.ReadSection(_fileBytes, entry, _verifyChecksums, _diagnostics.Add);
+            return container.ReadSection(_fileBytes, entry, _verifyChecksums, reportDiagnostic);
         }
         catch (Exception ex) when (ex is not DwgException && IsParseFailure(ex))
         {

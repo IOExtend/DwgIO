@@ -15,6 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\Shared\AtomicOutput.cs" Link="AtomicOutput.cs" />
     <InternalsVisibleTo Include="DwgIO.Tests" />
   </ItemGroup>
 

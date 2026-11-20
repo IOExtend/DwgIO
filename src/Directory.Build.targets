@@ -1,0 +1,11 @@
+<Project>
+  <!-- Adapter and engine ship on one tag, so the packed engine dependency is exact [X.Y.Z], not >=; a mix gives NU1608. -->
+  <Target Name="PinProjectReferencesExactly" Condition="'$(PinProjectReferencesExactly)' == 'true'"
+          AfterTargets="_GetProjectReferenceVersions">
+    <ItemGroup>
+      <_Pinned Include="@(_ProjectReferencesWithVersions)"><ProjectVersion>[%(_ProjectReferencesWithVersions.ProjectVersion)]</ProjectVersion></_Pinned>
+      <_ProjectReferencesWithVersions Remove="@(_ProjectReferencesWithVersions)" />
+      <_ProjectReferencesWithVersions Include="@(_Pinned)" />
+    </ItemGroup>
+  </Target>
+</Project>

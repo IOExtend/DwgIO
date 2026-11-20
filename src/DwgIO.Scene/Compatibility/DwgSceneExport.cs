@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
-using DwgIO.Internal;
+using DwgIO.Output;
 using IOScene;
 using IOScene.Formats;
 

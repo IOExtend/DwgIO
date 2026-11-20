@@ -50,8 +50,8 @@ public class CliOutputTests
                 PreviewOffset = 0,
                 Codepage = 30,
             },
-            []);
-        document.ReportDiagnostic("AcDb:Handles: unexpected end of stream");
+            [],
+            diagnostics: ["AcDb:Handles: unexpected end of stream"]);
 
         using var output = new StringWriter();
         int exit = Program.InspectDocument(document, output);
@@ -81,11 +81,8 @@ public class CliOutputTests
                 PreviewOffset = 0,
                 Codepage = 30,
             },
-            []);
-        for (int i = 0; i < 1234; i++)
-        {
-            document.ReportDiagnostic($"problem {i}");
-        }
+            [],
+            diagnostics: Enumerable.Range(0, 1234).Select(i => $"problem {i}"));
 
         using var output = new StringWriter();
         Program.InspectDocument(document, output);

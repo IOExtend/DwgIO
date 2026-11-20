@@ -12,7 +12,7 @@ DwgIO is a .NET library and command line tool that reads Autodesk AutoCAD drawin
 - Parses drawing metadata: summary information with custom properties and dates, application information, file dependencies and the embedded thumbnail preview.
 - Lists the objects of a drawing through its handle map and decodes the geometry of LINE, CIRCLE, ARC and POINT entities.
 - Writes a JSON export of the metadata, the section catalog and the decoded entities.
-- Converts a drawing into a neutral [IOScene](https://www.nuget.org/packages/IOScene) scene document (`DwgIO.Scene` package): geometry in metres, ACI entity colours, one element per entity with its handle.
+- Converts a drawing into a neutral [IOScene](https://www.nuget.org/packages/IOScene) scene document (`DwgIO.Scene.Adapter` package): geometry in metres, ACI entity colours, one element per entity with its handle.
 - Exports the scene to Wavefront OBJ (with an MTL colour library) and binary glTF (GLB).
 - Draws model space to SVG (`dwgio svg`): LINE, CIRCLE, ARC and POINT in the top view, in their ACI colours.
 - Writes a standalone interactive 3D HTML viewer (`.html`): the WebGL viewer of [IOViewer](https://github.com/IOExtend/IOViewer) embedded with the scene, no server or external scripts.
@@ -29,8 +29,11 @@ and add the libraries to a .NET project:
 
 ```sh
 dotnet add package DwgIO
-dotnet add package DwgIO.Scene
+dotnet add package DwgIO.Scene.Adapter
 ```
+
+Install `DwgIO.Scene` for the existing scene API with OBJ, GLB, SVG and HTML exporters.
+It includes the adapter.
 
 The libraries target .NET 8 and .NET 10. They use managed code without native dependencies or Windows-only APIs and support Windows, Linux and macOS. Tests run on Windows, Linux and macOS.
 
@@ -143,7 +146,8 @@ foreach (var entity in doc.Entities)
 
 The JSON export is `DwgJsonExporter` in the `DwgIO.Json` namespace. See [Getting started](docs/getting-started.md) and [Public API](docs/public-api.md) for the supported types.
 
-The scene export is `DwgSceneReader` in the `DwgIO.Scene` package. It converts a drawing into an `IOScene.SceneDocument` — the neutral scene model of the IOExtend tools, shared with RvtIO and NwcIO:
+`DwgSceneReader` converts a drawing into an `IOScene.SceneDocument`, the neutral model shared with RvtIO and NwcIO.
+The converter is available in `DwgIO.Scene.Adapter` and through the existing `DwgIO.Scene` API.
 
 ```csharp
 using DwgIO.Scene;
@@ -171,7 +175,7 @@ The documentation site with the API reference is at <https://ioextend.github.io/
 | `AcDb:AppInfo`, `AcDb:FileDepList` and `AcDb:Preview` parsing | done |
 | Handle map and object stream inventory | done |
 | Entity decoding: LINE, CIRCLE, ARC and POINT geometry | done (partial) |
-| IOScene scene export (`DwgIO.Scene`): entities, geometry, ACI colours | done (partial) |
+| IOScene scene conversion (`DwgIO.Scene.Adapter`): entities, geometry, ACI colours | done (partial) |
 | OBJ and GLB export through the scene | done (partial) |
 | SVG export of model space (`dwgio svg`) | done (partial) |
 | Standalone HTML viewer export through IOViewer | done (partial) |
