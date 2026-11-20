@@ -36,6 +36,10 @@ public sealed class DwgDocument
                 AppInfo = TryReadMetadata("AcDb:AppInfo", b => AppInfoParser.Parse(b, fileHeader.Codepage));
                 FileDepList = TryReadMetadata("AcDb:FileDepList", b => FileDepListParser.Parse(b, fileHeader.Codepage));
                 Preview = ReadOptionalPreview();
+                AppInfoHistory = ReadAppInfoHistory();
+                RevHistory = TryReadMetadata("AcDb:RevHistory", b => RevHistoryParser.Parse(b));
+                AuxHeader = TryReadMetadata("AcDb:AuxHeader", b => AuxHeaderParser.Parse(b));
+                Template = TryReadMetadata("AcDb:Template", b => TemplateParser.Parse(b, fileHeader.Codepage));
             }
 
             if (options.ReadObjects)
@@ -74,11 +78,25 @@ public sealed class DwgDocument
     /// <summary>Producer information from <c>AcDb:AppInfo</c>, when present.</summary>
     public DwgAppInfo? AppInfo { get; }
 
+    /// <summary>The decompressed AcDb:AppInfoHistory payload when read. Its record layout is unknown.</summary>
+    public ReadOnlyMemory<byte> AppInfoHistory { get; }
+
+    /// <summary>The save references of <c>AcDb:RevHistory</c>, when present.</summary>
+    public DwgRevHistory? RevHistory { get; }
+
+    /// <summary>The auxiliary header of <c>AcDb:AuxHeader</c>, when present (save counters and drawing times).</summary>
+    public DwgAuxHeader? AuxHeader { get; }
+
+    /// <summary>The template description of <c>AcDb:Template</c>, when present.</summary>
+    public DwgTemplate? Template { get; }
+
     /// <summary>External file dependencies from <c>AcDb:FileDepList</c>, when present.</summary>
     public DwgFileDepList? FileDepList { get; }
 
     /// <summary>Embedded thumbnail from <c>AcDb:Preview</c>, when present.</summary>
     public DwgPreview? Preview { get; }
+
+    internal string? PreviewReadError { get; private set; }
 
     /// <summary>Handle→offset index from <c>AcDb:Handles</c> (R2004-family files, ReadObjects on).</summary>
     public DwgHandleMap? HandleMap { get; }
@@ -93,7 +111,8 @@ public sealed class DwgDocument
     public IReadOnlyList<string> Diagnostics { get; } = [];
 
     /// <summary>Creates an in-memory document over a file header and a fixed entity list (tests).</summary>
-    internal DwgDocument(string path, DwgFileHeader fileHeader, IReadOnlyList<DwgEntity> entities)
+    internal DwgDocument(string path, DwgFileHeader fileHeader, IReadOnlyList<DwgEntity> entities,
+        DwgPreview? preview = null, IReadOnlyList<DwgObjectInfo>? objects = null)
     {
         Path = path;
         _fileBytes = [];
@@ -102,6 +121,14 @@ public sealed class DwgDocument
         Sections = [];
         Diagnostics = _diagnostics;
         Entities = entities;
+        Preview = preview;
+        Objects = objects ?? [];
+    }
+
+    /// <summary>Creates a document over a container built in the tests; reads follow <paramref name="options"/>.</summary>
+    internal DwgDocument(string path, R2004Container container, DwgFileHeader fileHeader, DwgReaderOptions options)
+        : this(path, [], fileHeader, container, options)
+    {
     }
 
     /// <summary>Records a non-fatal problem found after the document was opened (e.g. by an exporter).</summary>
@@ -131,6 +158,50 @@ public sealed class DwgDocument
         }
     }
 
+    /// <summary>
+    /// Opens and parses a DWG from a stream (a network handle, an archive entry, an already-open file). The
+    /// stream is read to the end into memory once, so the results are identical to <see cref="Open(string, DwgReaderOptions?)"/>
+    /// on the same bytes; <paramref name="documentName"/> names the document in <see cref="Path"/>, error
+    /// messages and exports (the default is "stream").
+    /// </summary>
+    /// <exception cref="ArgumentException">The stream cannot be read.</exception>
+    /// <exception cref="DwgUnsupportedVersionException">The file's container is not implemented yet (R13-R2000, R2007).</exception>
+    /// <exception cref="DwgException">The file is corrupt or truncated.</exception>
+    public static DwgDocument Open(Stream stream, string? documentName = null, DwgReaderOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        if (!stream.CanRead)
+        {
+            throw new ArgumentException("The stream cannot be read.", nameof(stream));
+        }
+
+        options ??= DwgReaderOptions.Default;
+        string name = string.IsNullOrEmpty(documentName) ? "stream" : documentName;
+        long? expectedLength = stream.CanSeek ? stream.Length - stream.Position : null;
+        byte[] fileBytes;
+        try
+        {
+            using var buffer = expectedLength is long length and >= 0
+                ? new MemoryStream((int)Math.Min(length, int.MaxValue))
+                : new MemoryStream();
+            stream.CopyTo(buffer);
+            fileBytes = buffer.ToArray();
+        }
+        catch (Exception ex) when (ex is not DwgException && IsParseFailure(ex))
+        {
+            throw Corrupt(ex);
+        }
+
+        try
+        {
+            return Parse(name, fileBytes, options);
+        }
+        catch (Exception ex) when (ex is not DwgException && IsParseFailure(ex))
+        {
+            throw Corrupt(ex);
+        }
+    }
+
     private static DwgDocument Parse(string path, byte[] fileBytes, DwgReaderOptions options)
     {
         var fileHeader = DwgFileHeader.Parse(fileBytes);
@@ -138,7 +209,7 @@ public sealed class DwgDocument
         if (fileHeader.Version.Family != DwgContainerFamily.R2004Family)
         {
             throw new DwgUnsupportedVersionException(
-                $"{fileHeader.Version.Release} ({fileHeader.Version.Magic}) is not supported yet: " +
+                $"{path}: {fileHeader.Version.Release} ({fileHeader.Version.Magic}) is not supported yet: " +
                 (fileHeader.Version.Family == DwgContainerFamily.R2007
                     ? "the R2007 container is planned."
                     : "the R13-R2000 container is planned."));
@@ -176,8 +247,7 @@ public sealed class DwgDocument
 
     private DwgSummaryInfo? ReadOptionalSummaryInfo()
     {
-        var entry = _container!.SectionMap.FindByName("AcDb:SummaryInfo");
-        if (entry is null || entry.Encryption == 1)
+        if (!TryGetReadableSection("AcDb:SummaryInfo", out var entry))
         {
             return null;
         }
@@ -185,17 +255,35 @@ public sealed class DwgDocument
         return TryParseMetadata("AcDb:SummaryInfo", static bytes => SummaryInfoParser.Parse(bytes), entry);
     }
 
+    /// <summary>Looks up a named section the reader is expected to parse: present and not encrypted. An
+    /// encrypted section is reported once, instead of the data simply going missing.</summary>
+    internal bool TryGetReadableSection(string name, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out SectionEntry? entry)
+    {
+        entry = _container!.SectionMap.FindByName(name);
+        if (entry is null)
+        {
+            return false;
+        }
+
+        if (entry.Encryption == 1)
+        {
+            _diagnostics.Add($"{name}: the section is encrypted (encryption flag 1) and was skipped; decrypting it is not supported");
+            return false;
+        }
+
+        return true;
+    }
+
     private DwgHandleMap? ReadOptionalHandleMap()
     {
-        var entry = _container!.SectionMap.FindByName("AcDb:Handles");
-        if (entry is null || entry.Encryption == 1)
+        if (!TryGetReadableSection("AcDb:Handles", out var entry))
         {
             return null;
         }
 
         try
         {
-            return DwgHandleMap.Parse(ReadSectionCore(entry));
+            return DwgHandleMap.Parse(ReadSectionCore(entry), _diagnostics.Add);
         }
         catch (Exception ex) when (IsParseFailure(ex))
         {
@@ -206,8 +294,7 @@ public sealed class DwgDocument
 
     private IReadOnlyList<DwgObjectInfo> ReadOptionalObjects()
     {
-        var entry = _container!.SectionMap.FindByName("AcDb:AcDbObjects");
-        if (entry is null || entry.Encryption == 1)
+        if (!TryGetReadableSection("AcDb:AcDbObjects", out var entry))
         {
             return [];
         }
@@ -215,13 +302,34 @@ public sealed class DwgDocument
         try
         {
             _objectStreamBytes = ReadSectionCore(entry);
-            return ObjectStreamWalker.Walk(_objectStreamBytes, r2010Plus: FileHeader.Version.Year >= 2010);
+            // Drive the walk by the handle map: after a gap it resumes at the next map offset, so records
+            // beyond the gap are still inventoried instead of silently lost.
+            var mapOffsets = HandleMap is null
+                ? null
+                : HandleMap.Entries.Select(e => e.Offset).Distinct().OrderBy(o => o).ToList();
+            var objects = ObjectStreamWalker.Walk(_objectStreamBytes, r2010Plus: FileHeader.Version.Year >= 2010, mapOffsets, _diagnostics.Add);
+            if (HandleMap is { Count: > 0 } map)
+            {
+                int missing = CountUnreachedObjects(objects, map);
+                if (missing > 0)
+                {
+                    _diagnostics.Add($"AcDb:AcDbObjects: inventory holds {objects.Count} records; {missing} of {map.Count} handle-map entries were unreached");
+                }
+            }
+
+            return objects;
         }
         catch (Exception ex) when (IsParseFailure(ex))
         {
             _diagnostics.Add($"AcDb:AcDbObjects: {ex.Message}");
             return [];
         }
+    }
+
+    internal static int CountUnreachedObjects(IReadOnlyList<DwgObjectInfo> objects, DwgHandleMap map)
+    {
+        var reached = objects.Select(o => (o.Handle, (ulong)o.StreamOffset)).ToHashSet();
+        return map.Entries.Count(e => !reached.Contains((e.Handle, e.Offset)));
     }
 
     private List<DwgEntity> ReadOptionalEntities()
@@ -256,23 +364,45 @@ public sealed class DwgDocument
         return entities;
     }
 
+    private ReadOnlyMemory<byte> ReadAppInfoHistory()
+    {
+        if (!TryGetReadableSection("AcDb:AppInfoHistory", out var entry))
+        {
+            return ReadOnlyMemory<byte>.Empty;
+        }
+
+        try
+        {
+            return ReadSectionCore(entry);
+        }
+        catch (Exception ex) when (IsParseFailure(ex))
+        {
+            _diagnostics.Add($"AcDb:AppInfoHistory: {ex.Message}");
+            return ReadOnlyMemory<byte>.Empty;
+        }
+    }
+
     private DwgPreview? ReadOptionalPreview()
     {
-        var entry = _container!.SectionMap.FindByName("AcDb:Preview");
-        if (entry is null || entry.Encryption == 1)
+        if (!TryGetReadableSection("AcDb:Preview", out var entry))
         {
+            if (entry is not null)
+            {
+                PreviewReadError = _diagnostics[^1];
+            }
             return null;
         }
 
         try
         {
             var pageLayout = new List<SectionPageLayout>();
-            var bytes = _container.ReadSection(_fileBytes, entry, _verifyChecksums, _diagnostics.Add, pageLayout);
+            var bytes = _container!.ReadSection(_fileBytes, entry, _verifyChecksums, _diagnostics.Add, pageLayout);
             return PreviewParser.Parse(bytes, pageLayout);
         }
         catch (Exception ex) when (IsParseFailure(ex))
         {
-            _diagnostics.Add($"AcDb:Preview: {ex.Message}");
+            PreviewReadError = $"AcDb:Preview: {ex.Message}";
+            _diagnostics.Add(PreviewReadError);
             return null;
         }
     }
@@ -280,8 +410,7 @@ public sealed class DwgDocument
     private T? TryReadMetadata<T>(string sectionName, Func<byte[], T> parse)
         where T : class
     {
-        var entry = _container!.SectionMap.FindByName(sectionName);
-        if (entry is null || entry.Encryption == 1)
+        if (!TryGetReadableSection(sectionName, out var entry))
         {
             return null;
         }

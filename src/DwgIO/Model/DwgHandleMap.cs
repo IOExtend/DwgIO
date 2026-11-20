@@ -32,11 +32,13 @@ public sealed class DwgHandleMap
         return _byHandle.TryGetValue(handle, out var entry) ? entry : null;
     }
 
-    /// <summary>Parses the decompressed <c>AcDb:Handles</c> section.</summary>
-    internal static DwgHandleMap Parse(byte[] data)
+    /// <summary>Parses the decompressed <c>AcDb:Handles</c> section. Where the parse stops early, or an entry
+    /// is dropped, a message goes to <paramref name="diagnostic"/> instead of vanishing.</summary>
+    internal static DwgHandleMap Parse(byte[] data, Action<string>? diagnostic = null)
     {
         var entries = new List<DwgHandleMapEntry>();
         int pos = 0;
+        int dropped = 0;
         while (pos + 2 <= data.Length)
         {
             int blockSize = (data[pos] << 8) | data[pos + 1];
@@ -50,6 +52,7 @@ public sealed class DwgHandleMap
             {
                 // Real writers leave a truncated final block (or padding) past the last
                 // well-formed one: treat it as the end of the map, not a hard error.
+                Report(diagnostic, $"handle map: block at {pos - 2} is truncated ({blockSize} declared, {data.Length - pos} present); the map ends here");
                 break;
             }
 
@@ -67,13 +70,21 @@ public sealed class DwgHandleMap
                     handleDelta = reader.ReadVarUInt();
                     offsetDelta = reader.ReadVarInt();
                 }
-                catch (DwgException)
+                catch (DwgException ex)
                 {
+                    Report(diagnostic, $"handle map: block at {pos - 2}: unreadable delta pair after {entries.Count} entries ({ex.Message}); the rest of the block is skipped");
                     break;
                 }
 
                 lastHandle += handleDelta;
                 lastOffset += offsetDelta;
+                if (lastOffset < 0)
+                {
+                    dropped++;
+                    Report(diagnostic, $"handle map: entry {lastHandle} has the negative offset {lastOffset} and is dropped");
+                    continue;
+                }
+
                 if (entries.Count >= MaxEntries)
                 {
                     throw new DwgException("Handle map exceeds the entry cap; file is malformed.");
@@ -85,6 +96,13 @@ public sealed class DwgHandleMap
             pos += blockSize;
         }
 
+        if (dropped > 0)
+        {
+            Report(diagnostic, $"handle map: {dropped} of {dropped + entries.Count} entries were dropped");
+        }
+
         return new DwgHandleMap { Entries = entries };
     }
+
+    private static void Report(Action<string>? diagnostic, string message) => diagnostic?.Invoke(message);
 }

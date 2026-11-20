@@ -42,7 +42,10 @@ public sealed class DwgEntity
     /// Point = [x,y,z]. Null for non-decoded kinds.</summary>
     public double[]? Geometry { get; init; }
 
-    /// <summary>DXF 62 colour index (low byte of the stored colour value) from the common preamble.</summary>
+    internal bool IsModelSpace { get; init; } = true;
+
+    /// <summary>DXF 62 colour index from the common preamble: the low 9 bits of the stored colour value,
+    /// so 0 is BYBLOCK, 1 to 255 are indexed colours and 256 is BYLAYER.</summary>
     public int ColorIndex { get; init; }
 
     /// <summary>DXF 48 linetype scale from the common preamble.</summary>

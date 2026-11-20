@@ -1,5 +1,7 @@
 using System.Buffers.Binary;
 using System.Text.RegularExpressions;
+using System.Xml;
+using System.Xml.Linq;
 using DwgIO.Model;
 
 namespace DwgIO.Internal.Parsing;
@@ -24,26 +26,22 @@ internal static partial class AppInfoParser
     [GeneratedRegex("build_version=\\\\?\"([^\"\\\\]+)")]
     private static partial Regex BuildVersionRegex();
 
+    [GeneratedRegex("""(?:^|\s)name\s*=\s*"(?<name>[^"]*)"|(?:^|\s)name\s*=\s*'(?<name>[^']*)'""")]
+    private static partial Regex ProductNameRegex();
+
     /// <summary>Parses an AppInfo payload; <paramref name="codepage"/> decodes 8-bit strings.</summary>
     public static DwgAppInfo Parse(byte[] data, int codepage)
     {
-        if (data.Length >= 4)
+        if (data.Length >= 4 && BinaryPrimitives.ReadUInt32LittleEndian(data) is 2 or 3
+            && TryParseUnicode(data, codepage) is { } unicodeInfo)
         {
-            uint marker = BinaryPrimitives.ReadUInt32LittleEndian(data);
-            if (marker is 2 or 3)
-            {
-                var unicodeInfo = TryParseUnicode(data, codepage);
-                if (unicodeInfo is not null)
-                {
-                    return unicodeInfo;
-                }
-            }
+            return unicodeInfo;
         }
 
-        return ParseAnsi(data, codepage);
+        return BuildAnsi(data, codepage);
     }
 
-    private static DwgAppInfo ParseAnsi(byte[] data, int codepage)
+    private static DwgAppInfo BuildAnsi(byte[] data, int codepage)
     {
         var cursor = new MetadataByteCursor(data, codepage);
         var name = cursor.ReadAnsiString16();
@@ -56,6 +54,7 @@ internal static partial class AppInfoParser
             Name = name,
             ProductXml = productXml,
             Version = version ?? string.Empty,
+            Product = ExtractProduct(productXml),
         };
     }
 
@@ -109,11 +108,44 @@ internal static partial class AppInfoParser
                 Version = version,
                 Comment = comment,
                 ProductXml = productXml,
+                Product = ExtractProduct(productXml),
             };
         }
         catch (DwgException)
         {
             return null;
+        }
+    }
+
+    /// <summary>
+    /// The product the product XML names: its <c>name</c> attribute ("AutoCAD", "AutoCAD LT", "Teigha(R)", ...),
+    /// per libredwg's appinfo.spec. Empty when the XML has no readable name attribute.
+    /// </summary>
+    private static string ExtractProduct(string productXml)
+    {
+        if (productXml.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            using var input = new StringReader(productXml);
+            using var reader = XmlReader.Create(input, new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit });
+            return XElement.Load(reader).Attribute("name")?.Value ?? string.Empty;
+        }
+        catch (XmlException)
+        {
+            if (productXml.Contains("<!DOCTYPE", StringComparison.OrdinalIgnoreCase))
+            {
+                return string.Empty;
+            }
+
+            // Some save applications write fragments or escape attribute quotes in the stored text.
+            string normalized = productXml.Replace("\\\"", "\"", StringComparison.Ordinal);
+            return ProductNameRegex().Match(normalized) is { Success: true } match
+                ? System.Net.WebUtility.HtmlDecode(match.Groups["name"].Value)
+                : string.Empty;
         }
     }
 
