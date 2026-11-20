@@ -7,6 +7,11 @@ API between minor releases.
 ## [Unreleased]
 
 ### Added
+- `AcDb:AppInfoHistory`, `AcDb:RevHistory`, `AcDb:AuxHeader` and `AcDb:Template` parsing: the earlier saves'
+  producer records (best effort, the section's layout is undocumented), the save references, the auxiliary
+  header (save counter, drawing times, next handle) and the template description with its unit system. Each is
+  exposed on `DwgDocument`, written to the JSON export and summarised by `dwgio inspect`; truncated input
+  produces a diagnostic (#36).
 - `dwgio --version` and `--help` (and `-v`/`-h`) print the version and the usage with exit code 0; an unknown
   option still exits 1 (#18).
 - `dwgio entities <file.dwg> [--type LINE,CIRCLE] [--json]` lists decoded entities one line each or as a JSON

@@ -88,6 +88,59 @@ public static class DwgJsonExporter
             writer.WriteEndObject();
         }
 
+        if (document.AppInfoHistory.Count > 0)
+        {
+            writer.WriteStartObject("appInfoHistory");
+            writer.WriteNumber("count", document.AppInfoHistory.Count);
+            writer.WriteStartArray("records");
+            foreach (var record in document.AppInfoHistory)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("name", record.Name);
+                writer.WriteString("version", record.Version);
+                writer.WriteString("product", record.Product);
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+
+        if (document.RevHistory is { } revHistory)
+        {
+            writer.WriteStartObject("revHistory");
+            writer.WriteNumber("classVersion", revHistory.ClassVersion);
+            writer.WriteNumber("classMinor", revHistory.ClassMinor);
+            writer.WriteStartArray("histories");
+            foreach (uint history in revHistory.Histories)
+            {
+                writer.WriteNumberValue(history);
+            }
+
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+
+        if (document.AuxHeader is { } auxHeader)
+        {
+            writer.WriteStartObject("auxHeader");
+            writer.WriteNumber("dwgVersion", auxHeader.DwgVersion);
+            writer.WriteNumber("maintVersion", auxHeader.MaintVersion);
+            writer.WriteNumber("numsaves", auxHeader.Numsaves);
+            writer.WriteString("createdUtc", auxHeader.CreatedUtc?.ToString("O"));
+            writer.WriteString("modifiedUtc", auxHeader.ModifiedUtc?.ToString("O"));
+            writer.WriteNumber("handseed", auxHeader.Handseed);
+            writer.WriteEndObject();
+        }
+
+        if (document.Template is { } template)
+        {
+            writer.WriteStartObject("template");
+            writer.WriteString("description", template.Description);
+            writer.WriteNumber("measurement", template.Measurement);
+            writer.WriteEndObject();
+        }
+
         if (document.Preview is { } preview)
         {
             writer.WriteStartObject("preview");

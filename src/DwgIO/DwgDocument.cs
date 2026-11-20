@@ -36,6 +36,10 @@ public sealed class DwgDocument
                 AppInfo = TryReadMetadata("AcDb:AppInfo", b => AppInfoParser.Parse(b, fileHeader.Codepage));
                 FileDepList = TryReadMetadata("AcDb:FileDepList", b => FileDepListParser.Parse(b, fileHeader.Codepage));
                 Preview = ReadOptionalPreview();
+                AppInfoHistory = ReadAppInfoHistory();
+                RevHistory = TryReadMetadata("AcDb:RevHistory", b => RevHistoryParser.Parse(b));
+                AuxHeader = TryReadMetadata("AcDb:AuxHeader", b => AuxHeaderParser.Parse(b));
+                Template = TryReadMetadata("AcDb:Template", b => TemplateParser.Parse(b, fileHeader.Codepage));
             }
 
             if (options.ReadObjects)
@@ -73,6 +77,20 @@ public sealed class DwgDocument
 
     /// <summary>Producer information from <c>AcDb:AppInfo</c>, when present.</summary>
     public DwgAppInfo? AppInfo { get; }
+
+    /// <summary>The producer records of the earlier saves of the drawing, from <c>AcDb:AppInfoHistory</c>,
+    /// when present (best effort: the section's layout is undocumented, so the walk stops with a diagnostic
+    /// where a record does not decode).</summary>
+    public IReadOnlyList<DwgAppInfo> AppInfoHistory { get; } = [];
+
+    /// <summary>The save references of <c>AcDb:RevHistory</c>, when present.</summary>
+    public DwgRevHistory? RevHistory { get; }
+
+    /// <summary>The auxiliary header of <c>AcDb:AuxHeader</c>, when present (save counters and drawing times).</summary>
+    public DwgAuxHeader? AuxHeader { get; }
+
+    /// <summary>The template description of <c>AcDb:Template</c>, when present.</summary>
+    public DwgTemplate? Template { get; }
 
     /// <summary>External file dependencies from <c>AcDb:FileDepList</c>, when present.</summary>
     public DwgFileDepList? FileDepList { get; }
@@ -288,6 +306,24 @@ public sealed class DwgDocument
         }
 
         return entities;
+    }
+
+    private IReadOnlyList<DwgAppInfo> ReadAppInfoHistory()
+    {
+        if (!TryGetReadableSection("AcDb:AppInfoHistory", out var entry))
+        {
+            return [];
+        }
+
+        try
+        {
+            return AppInfoHistoryParser.Parse(ReadSectionCore(entry), FileHeader.Codepage, _diagnostics.Add);
+        }
+        catch (Exception ex) when (IsParseFailure(ex))
+        {
+            _diagnostics.Add($"AcDb:AppInfoHistory: {ex.Message}");
+            return [];
+        }
     }
 
     private DwgPreview? ReadOptionalPreview()

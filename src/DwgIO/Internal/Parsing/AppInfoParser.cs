@@ -28,25 +28,33 @@ internal static partial class AppInfoParser
     private static partial Regex ProductNameRegex();
 
     /// <summary>Parses an AppInfo payload; <paramref name="codepage"/> decodes 8-bit strings.</summary>
-    public static DwgAppInfo Parse(byte[] data, int codepage)
+    public static DwgAppInfo Parse(byte[] data, int codepage) => ParseOne(data, codepage, out _);
+
+    /// <summary>
+    /// Parses one AppInfo record from the start of <paramref name="data"/> and reports how many bytes it
+    /// consumed, so a sequence of records (the <c>AcDb:AppInfoHistory</c> section) can be walked.
+    /// </summary>
+    internal static DwgAppInfo ParseOne(byte[] data, int codepage, out int consumed)
     {
         if (data.Length >= 4)
         {
             uint marker = BinaryPrimitives.ReadUInt32LittleEndian(data);
             if (marker is 2 or 3)
             {
-                var unicodeInfo = TryParseUnicode(data, codepage);
+                var unicodeInfo = TryParseUnicode(data, codepage, out var unicodeConsumed);
                 if (unicodeInfo is not null)
                 {
+                    consumed = unicodeConsumed;
                     return unicodeInfo;
                 }
             }
         }
 
-        return ParseAnsi(data, codepage);
+        consumed = ParseAnsi(data, codepage);
+        return BuildAnsi(data, codepage);
     }
 
-    private static DwgAppInfo ParseAnsi(byte[] data, int codepage)
+    private static DwgAppInfo BuildAnsi(byte[] data, int codepage)
     {
         var cursor = new MetadataByteCursor(data, codepage);
         var name = cursor.ReadAnsiString16();
@@ -63,6 +71,18 @@ internal static partial class AppInfoParser
         };
     }
 
+    /// <summary>Consumes one ANSI-layout record and reports its length; throws on a truncated field.</summary>
+    private static int ParseAnsi(byte[] data, int codepage)
+    {
+        var cursor = new MetadataByteCursor(data, codepage);
+        cursor.ReadAnsiString16();
+        cursor.ReadU32();
+        cursor.ReadAnsiString16();
+        cursor.ReadAnsiString16();
+        TryRead(cursor, c => c.ReadAnsiString16());
+        return cursor.Position;
+    }
+
     /// <summary>
     /// UTF-16 layout written by AC1021+ (R2007+) files:
     /// <c>u32 marker, [u16] name, u32 entry count</c>, then <c>count</c> entries of
@@ -71,8 +91,9 @@ internal static partial class AppInfoParser
     /// holds the application version, and the product XML's build_version
     /// attribute is the fallback when the version entry is absent.
     /// </summary>
-    private static DwgAppInfo? TryParseUnicode(byte[] data, int codepage)
+    private static DwgAppInfo? TryParseUnicode(byte[] data, int codepage, out int consumed)
     {
+        consumed = 0;
         try
         {
             var cursor = new MetadataByteCursor(data, codepage);
@@ -100,6 +121,8 @@ internal static partial class AppInfoParser
                     productXml = text;
                 }
             }
+
+            consumed = cursor.Position;
 
             if (version.Length == 0 && productXml.Length > 0
                 && BuildVersionRegex().Match(productXml) is { Success: true } match)

@@ -160,6 +160,31 @@ internal static class Program
             }
         }
 
+        if (doc.AppInfoHistory.Count > 0)
+        {
+            output.WriteLine($"App history: {Count(doc.AppInfoHistory.Count)} record(s)");
+            foreach (var record in doc.AppInfoHistory.Take(3))
+            {
+                output.WriteLine($"  {record.Name}  version={record.Version}  product={record.Product}");
+            }
+        }
+
+        if (doc.RevHistory is { } revHistory)
+        {
+            output.WriteLine($"Rev history: layout {revHistory.ClassVersion}.{revHistory.ClassMinor}  saves={Count(revHistory.Histories.Count)}");
+        }
+
+        if (doc.AuxHeader is { } auxHeader)
+        {
+            output.WriteLine($"Aux header: saves={Count(auxHeader.Numsaves)}  created={auxHeader.CreatedUtc:yyyy-MM-dd HH:mm} UTC  updated={auxHeader.ModifiedUtc:yyyy-MM-dd HH:mm} UTC  handseed={auxHeader.Handseed:X}");
+        }
+
+        if (doc.Template is { } template)
+        {
+            string units = template.IsMetric ? "metric" : "english";
+            output.WriteLine($"Template: \"{Truncate(template.Description, 60)}\"  units={units}");
+        }
+
         if (doc.Preview is { } preview)
         {
             output.WriteLine($"Preview: {preview.ImageKind} {Count(preview.ImageBytes.Length)} bytes");

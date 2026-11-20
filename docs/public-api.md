@@ -34,6 +34,10 @@ change in any release and is visible only to the test project through `Internals
 | `DwgHandleMap`, `DwgHandleMapEntry` | The handle to offset index of the object stream; `Find(handle)` looks up one object. |
 | `DwgObjectInfo`, `DwgHandle` | One record of the object stream: offset, size, type code and handle. |
 | `DwgEntity`, `DwgEntityKind` | A decoded entity: handle, type, colour, linetype scale and, for LINE, CIRCLE, ARC and POINT, its `Geometry`. |
+| `DwgAppInfoHistory` (list on `DwgDocument.AppInfoHistory`) | The producer records of the earlier saves, from `AcDb:AppInfoHistory` (best effort: the section's layout is undocumented, so the walk stops with a diagnostic where a record does not decode). |
+| `DwgRevHistory` | The save references of `AcDb:RevHistory`: layout version pair and one value per recorded save. |
+| `DwgAuxHeader` | The auxiliary header of `AcDb:AuxHeader`: version pair, save counter, creation and last-update times, next handle. |
+| `DwgTemplate` | The template description of `AcDb:Template`: description and unit system (English/metric). |
 
 ## JSON export (`DwgIO.Json`)
 
