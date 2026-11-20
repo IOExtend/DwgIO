@@ -7,6 +7,11 @@ API between minor releases.
 ## [Unreleased]
 
 ### Added
+- CI runs the tests on Linux and macOS as well as Windows (both target frameworks), replacing the Linux
+  build-only job (#34).
+- `test-files/public`: the folder for committed redistributable test drawings, with the origin and licence
+  recorded next to each file; the fixture search includes it, so a committed drawing turns the skipped
+  fixture tests into real runs in CI (#33, infrastructure — the drawings themselves follow).
 - `DwgDocument.Open(Stream, documentName?, options?)`: a drawing can now come from a stream (a network
   handle, an archive entry, an already-open file). The stream is read to memory once, so the results are
   identical to `Open(path)` on the same bytes; the unsupported-version message names the source (#37, first

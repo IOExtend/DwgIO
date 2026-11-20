@@ -32,7 +32,7 @@ dotnet add package DwgIO
 dotnet add package DwgIO.Scene
 ```
 
-The libraries target .NET 8 and .NET 10. They use managed code without native dependencies or Windows-only APIs and support Windows, Linux and macOS. Tests currently run on Windows.
+The libraries target .NET 8 and .NET 10. They use managed code without native dependencies or Windows-only APIs and support Windows, Linux and macOS. Tests run on Windows, Linux and macOS.
 
 ## Command line
 
