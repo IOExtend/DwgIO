@@ -232,13 +232,13 @@ public class DwgSceneExportTests : IDisposable
         if (OperatingSystem.IsWindows())
         {
             var user = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
-            var acl = new System.Security.AccessControl.FileSecurity();
-            acl.SetAccessRuleProtection(true, preserveInheritance: false);
-            acl.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(user,
-                System.Security.AccessControl.FileSystemRights.FullControl,
-                System.Security.AccessControl.AccessControlType.Allow));
             foreach (string path in paths)
             {
+                var acl = new System.Security.AccessControl.FileSecurity();
+                acl.SetAccessRuleProtection(true, preserveInheritance: false);
+                acl.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(user,
+                    System.Security.AccessControl.FileSystemRights.FullControl,
+                    System.Security.AccessControl.AccessControlType.Allow));
                 new FileInfo(path).SetAccessControl(acl);
             }
 
