@@ -11,6 +11,7 @@ The packages are published on nuget.org and attached to each tagged GitHub relea
 ```sh
 dotnet tool install --global DwgIO.Cli
 dotnet add package DwgIO
+dotnet add package DwgIO.Scene
 ```
 
 ## Command line tool
@@ -20,6 +21,7 @@ dwgio inspect drawing.dwg                      # version, metadata, entities and
 dwgio drawing.dwg drawing.json                 # metadata, section catalog and entities as JSON
 dwgio extract drawing.dwg AcDb:Header out.bin  # decompressed bytes of one named section
 dwgio preview drawing.dwg thumbnail            # embedded thumbnail; .png, .wmf or .bmp is added
+dwgio scene drawing.dwg drawing.scene.json     # neutral IOScene scene document (--unit mm|cm|m|ft|in)
 ```
 
 Sections are named as stored in the drawing, for example `AcDb:Header`, `AcDb:Classes` or `AcDb:SummaryInfo`. Errors go to standard error.
@@ -30,7 +32,8 @@ Sections are named as stored in the drawing, for example `AcDb:Header`, `AcDb:Cl
 | 1 | The command line is wrong. |
 | 2 | The input file does not exist. |
 | 3 | The DWG version is not supported yet or not recognised. |
-| 4 | The file could not be parsed, the drawing has no thumbnail preview (`preview`), or an unexpected error occurred. |
+| 4 | The file could not be parsed, or an unexpected error occurred. |
+| 5 | The drawing has no thumbnail preview (`preview`). |
 
 ## Library
 
@@ -62,6 +65,16 @@ foreach (var diagnostic in doc.Diagnostics)
 {
     Console.WriteLine(diagnostic);
 }
+```
+
+The scene export converts a drawing into an [IOScene](https://www.nuget.org/packages/IOScene) scene document with
+`DwgSceneReader` (see [Public API](public-api.md)):
+
+```csharp
+using DwgIO.Scene;
+
+var scene = DwgSceneReader.Read("drawing.dwg", new DwgSceneOptions { LengthUnit = "mm" });
+IOScene.SceneJson.Save(scene.Document, "drawing.scene.json");
 ```
 
 The supported surface is listed in [Public API](public-api.md); every type is in the [API reference](api/DwgIO.yml).

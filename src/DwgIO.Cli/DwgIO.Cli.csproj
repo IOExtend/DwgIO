@@ -11,6 +11,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DwgIO\DwgIO.csproj" />
+    <ProjectReference Include="..\DwgIO.Scene\DwgIO.Scene.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="DwgIO.Tests" />
   </ItemGroup>
 
 </Project>

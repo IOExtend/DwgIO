@@ -6,7 +6,63 @@ API between minor releases.
 
 ## [Unreleased]
 
+### Added
+- CI runs the tests on Linux and macOS as well as Windows (both target frameworks), replacing the Linux
+  build-only job (#34).
+- `test-files/public`: the folder for committed redistributable test drawings, with the origin and licence
+  recorded next to each file; the fixture search includes it, so a committed drawing turns the skipped
+  fixture tests into real runs in CI (#33, infrastructure — the drawings themselves follow).
+- `DwgDocument.Open(Stream, documentName?, options?)`: a drawing can now come from a stream (a network
+  handle, an archive entry, an already-open file). The stream is read to memory once, so the results are
+  identical to `Open(path)` on the same bytes; the unsupported-version message names the source (#37, first
+  step — reading data pages on demand remains open).
+- `AcDb:RevHistory`, `AcDb:AuxHeader` and `AcDb:Template` parsing exposes the revision values, auxiliary
+  header and template description on `DwgDocument`, in JSON and in `dwgio inspect`. The undecoded
+  `AcDb:AppInfoHistory` section is exposed as decompressed bytes, with its size in JSON and CLI output (#36).
+- Fixed object type names are available in `DwgObjectInfo.TypeName`, `dwgio inspect` and the JSON
+  `objects.byTypeName` field. Existing `objects.byType` keys are preserved (#20, fixed types only).
+- `dwgio --version` and `--help` (and `-v`/`-h`) print the version and the usage with exit code 0; an unknown
+  option still exits 1 (#18).
+- `dwgio entities <file.dwg> [--type LINE,CIRCLE] [--json]` lists decoded entities one line each or as a JSON
+  array, with the type filter validated against the known type names (#19). The JSON export writes to standard
+  output when the target is `-` (#19).
+- `DwgIO.Scene` package: converts a drawing into a neutral [IOScene](https://www.nuget.org/packages/IOScene) scene
+  document, the shared scene model of the IOExtend tools. One element per decoded entity with the handle as
+  `SourceId`, line and point geometries scaled to metres (`DwgSceneOptions.LengthUnit`), ACI colours on the
+  placements and a conversion report (`DwgSceneResult`). The scene passes the IOScene structural validation and
+  round-trips through the IOScene JSON format.
+- `dwgio scene <file.dwg> <out.json> [--unit mm|cm|m|ft|in]` writes the scene document.
+- `DwgSceneExport.SaveObj`/`SaveGlb` write a drawing to Wavefront OBJ (with an adjacent MTL colour library,
+  written as a pair) and binary glTF (GLB) through the IOScene writers; `dwgio drawing.dwg out.obj` and
+  `dwgio drawing.dwg out.glb` dispatch by extension.
+- `DwgSvgExporter` and `dwgio svg <file.dwg> <out.svg> [--scale n]` draw model space to SVG (#32): LINE,
+  CIRCLE, ARC and POINT in the top view with the y axis up, in their ACI colours, inside a view box that
+  contains every exported entity. Polylines, curves and text follow as the core decodes them.
+- `DwgViewerExport.SaveViewer` and `dwgio drawing.dwg out.html` write a standalone interactive 3D HTML viewer
+  (the IOViewer WebGL runtime embedded with the IOScene scene document; no server, no external scripts).
+- `dwgio inspect` is written through a `TextWriter`, so the report is testable directly.
+
 ### Fixed
+- `DwgAppInfo.Product` is filled from the product XML's `name` attribute ("AutoCAD", "AutoCAD LT",
+  "Teigha(R)", ...), so `dwgio inspect` and the JSON export name the product instead of an empty string (#35).
+- `dwgio preview` exits with code 5 when the drawing has no thumbnail, distinct from the parse-error code, and
+  reports a mismatch between the requested output extension and the image kind on standard error instead of
+  keeping both silent (#14).
+- Encrypted sections (encryption flag 1) are reported in `Diagnostics` and by `dwgio inspect` (the section
+  table marks them) instead of being skipped silently; decrypting them remains out of scope (#38).
+- Object stream: after a gap (a zero run or a broken record) the object walk resynchronises at the next
+  handle-map offset instead of stopping, and every early stop or skipped gap is reported in `Diagnostics`; the
+  inventory-versus-handle-map difference is reported as well, and `DwgHandleMap.Parse` reports truncated blocks
+  and drops negative offsets with a diagnostic (#13).
+- Fixture tests skip drawings of an unsupported version and count them in the skip reason, so one AC1021 file
+  in the fixture folder does not fail every test (#17).
+- Entity colour: the DXF 62 index takes the low 9 bits of the stored colour value, so BYLAYER (256) is reported
+  as 256 and not as 0 (which also means BYBLOCK) (#40). The JSON export writes `colorIndex` for BYBLOCK and
+  BYLAYER so they are distinguishable.
+- `dwgio` formats counts and byte sizes invariantly; the output no longer follows the machine's digit grouping
+  (#15).
+- `dwgio inspect` always prints the diagnostic total and the first diagnostics, whether or not any entity was
+  decoded (#16).
 - Packed 16-bit and 32-bit integers in their full-width form are read little-endian. They were read with their bytes
   reversed, so entity records that store a colour, extended data size or reactor count in that form were decoded from
   the wrong bit position and failed or gave NaN or absurd coordinates (#7).

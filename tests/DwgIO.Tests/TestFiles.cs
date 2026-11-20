@@ -1,21 +1,25 @@
 namespace DwgIO.Tests;
 
-/// <summary>Where the tests find private DWG files that are not part of the repository. The folder is named by the environment
-/// variable DWGIO_TEST_FILES; when it is not set, the folder test_files in the repository root (or in an ancestor of the test
-/// binary) is used. Files may lie directly in the folder or in one level of subfolders. A test that needs a file which is not
+/// <summary>Where the tests find DWG fixtures: the folder named by the environment variable DWGIO_TEST_FILES, the committed
+/// redistributable drawings of test-files/public, and a test_files folder in the repository root (or in an ancestor of the test
+/// binary). Files may lie directly in a folder or in one level of subfolders. A test that needs a file which is not
 /// there is reported as skipped with the reason, never passed.</summary>
 internal static class TestFiles
 {
     public const string EnvironmentVariable = "DWGIO_TEST_FILES";
 
-    /// <summary>Folders searched for fixtures, the one named by the environment variable first.</summary>
+    /// <summary>Folders searched for fixtures: the one named by the environment variable first, then the
+    /// committed redistributable drawings of test-files/public, then a test_files folder in the repository
+    /// root (or in an ancestor of the test binary).</summary>
     public static IEnumerable<string> Roots()
     {
         if (Environment.GetEnvironmentVariable(EnvironmentVariable) is { Length: > 0 } configured && Directory.Exists(configured))
             yield return configured;
         for (var directory = AppContext.BaseDirectory; directory != null; directory = Path.GetDirectoryName(directory))
         {
-            string candidate = Path.Combine(directory, "test_files");
+            string candidate = Path.Combine(directory, "test-files", "public");
+            if (Directory.Exists(candidate)) yield return candidate;
+            candidate = Path.Combine(directory, "test_files");
             if (Directory.Exists(candidate)) yield return candidate;
         }
     }
