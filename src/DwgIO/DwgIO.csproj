@@ -9,6 +9,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="DwgIO.Tests" />
     <InternalsVisibleTo Include="DwgIO.Scene" />
+    <InternalsVisibleTo Include="DwgIO.Cli" />
   </ItemGroup>
 
 </Project>

@@ -36,6 +36,29 @@ public class JsonExporterTests
         };
 
     [Fact]
+    public void Write_LeavesObjectTypeCodesAndAddsNames()
+    {
+        var header = new DwgFileHeader
+        {
+            Version = DwgVersionInfo.FromMagic("AC1032"u8.ToArray()),
+            Codepage = 30, MaintenanceVersion = 0, PreviewOffset = 0,
+        };
+        var item = new DwgObjectInfo
+        {
+            TypeCode = 0x13, Handle = 1, StreamHandle = new DwgHandle(0, 1, 1),
+            StreamOffset = 4, SizeBytes = 2, BitsStart = 6, BitsLength = 16,
+        };
+        var document = new DwgDocument("synthetic.dwg", header, [], objects: [item]);
+        using var buffer = new MemoryStream();
+        DwgJsonExporter.Write(document, buffer, DwgJsonExportOptions.Default);
+        using var json = JsonDocument.Parse(buffer.ToArray());
+        var objects = json.RootElement.GetProperty("objects");
+
+        Assert.Equal(1, objects.GetProperty("byType").GetProperty("13").GetInt32());
+        Assert.Equal(1, objects.GetProperty("byTypeName").GetProperty("LINE").GetInt32());
+    }
+
+    [Fact]
     public void Write_NonFiniteGeometry_WritesNullAndRecordsDiagnostic()
     {
         var document = CreateDocument(CreateEntity(

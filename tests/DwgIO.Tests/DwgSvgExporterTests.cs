@@ -104,6 +104,36 @@ public class DwgSvgExporterTests
     }
 
     [Fact]
+    public void Write_FullTurnArcUsesACircle()
+    {
+        var document = CreateDocument(Entity(1, DwgEntityKind.Arc, "ARC", [0, 0, 0, 5, 0, 0]));
+
+        string svg = WriteToString(document);
+
+        Assert.Single(System.Xml.Linq.XDocument.Parse(svg).Descendants(XName("circle")));
+    }
+
+    [Fact]
+    public void Write_IgnoresGeometryOutsideModelSpace()
+    {
+        var paperLine = new DwgEntity
+        {
+            Handle = 1, TypeCode = 0x13, TypeName = "LINE", Kind = DwgEntityKind.Line,
+            Geometry = [0, 0, 0, 5, 0, 0], IsModelSpace = false,
+        };
+
+        Assert.DoesNotContain("<line", WriteToString(CreateDocument(paperLine)), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    public void Write_RejectsNonFiniteScale(double scale)
+    {
+        Assert.Throws<ArgumentException>(() => WriteToString(CreateDocument(), new DwgSvgOptions { Scale = scale }));
+    }
+
+    [Fact]
     public void Write_EmptyDrawing_ProducesValidSvg()
     {
         string svg = WriteToString(CreateDocument());
