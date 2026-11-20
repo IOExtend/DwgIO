@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using DwgIO;
+using DwgIO.Internal;
 using DwgIO.Json;
 using DwgIO.Model;
 using DwgIO.Scene;
@@ -159,13 +160,9 @@ internal static class Program
             }
         }
 
-        if (doc.AppInfoHistory.Count > 0)
+        if (!doc.AppInfoHistory.IsEmpty)
         {
-            output.WriteLine($"App history: {Count(doc.AppInfoHistory.Count)} record(s)");
-            foreach (var record in doc.AppInfoHistory.Take(3))
-            {
-                output.WriteLine($"  {record.Name}  version={record.Version}  product={record.Product}");
-            }
+            output.WriteLine($"App history: {Count(doc.AppInfoHistory.Length)} bytes (raw)");
         }
 
         if (doc.RevHistory is { } revHistory)
@@ -320,7 +317,7 @@ internal static class Program
         {
             if (args[i] == "--scale")
             {
-                if (i + 1 >= args.Length || !double.TryParse(args[i + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out scale) || scale <= 0)
+                if (i + 1 >= args.Length || !double.TryParse(args[i + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out scale) || !double.IsFinite(scale) || scale <= 0)
                 {
                     error.WriteLine("error: --scale needs a positive number of pixels per drawing unit.");
                     return ExitUsage;
@@ -387,7 +384,7 @@ internal static class Program
         }
 
         var result = DwgSceneReader.Read(positional[0], options);
-        SceneJson.Save(result.Document, positional[1]);
+        AtomicOutput.Write(positional[1], stream => SceneJson.Write(result.Document, stream));
         output.WriteLine(
             $"{result.Document.Title}: {Count(result.ElementCount)} elements ({Count(result.ElementsWithGeometry)} with geometry)  ->  {positional[1]}");
         foreach (var diagnostic in result.Diagnostics.Take(5))
@@ -418,6 +415,12 @@ internal static class Program
     /// <summary>Writes the thumbnail of an opened document. Internal for the CLI tests.</summary>
     internal static int PreviewDocument(DwgDocument doc, string requested, TextWriter output, TextWriter error)
     {
+        if (doc.PreviewReadError is not null)
+        {
+            error.WriteLine($"error: {doc.PreviewReadError}");
+            return ExitParseError;
+        }
+
         var preview = doc.Preview;
         if (preview is null || !preview.HasImage)
         {
@@ -483,6 +486,8 @@ internal static class Program
                 case "--json":
                     json = true;
                     break;
+                case string option when option.StartsWith('-'):
+                    return UnknownOption(option, output, error);
                 default:
                     if (file is not null)
                     {
@@ -514,6 +519,12 @@ internal static class Program
                 }
 
                 filter.Add(trimmed);
+            }
+
+            if (filter.Count == 0)
+            {
+                error.WriteLine("error: --type needs at least one type name.");
+                return ExitUsage;
             }
         }
 

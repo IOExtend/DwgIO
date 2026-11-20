@@ -154,7 +154,7 @@ IOScene.SceneJson.Save(scene.Document, "drawing.scene.json");
 
 Every coordinate is scaled to metres by `LengthUnit` (a DWG stores plain numbers, so the unit is a caller decision and `UnitAssumed` records it), each entity becomes an element with its handle as `SourceId`, and LINE, CIRCLE, ARC and POINT become line and point geometries with their ACI colour.
 
-`DwgSceneExport` writes that scene out in the exchange formats: `SaveObj(document, "drawing.obj", options)` produces an OBJ with an adjacent MTL colour library (written as a pair, atomically), `SaveGlb(document, "drawing.glb", options)` produces binary glTF. Both return the same `DwgSceneResult` report.
+`DwgSceneExport` writes that scene out in the exchange formats: `SaveObj(document, "drawing.obj", options)` produces an OBJ with an adjacent MTL colour library (with rollback if replacement fails), `SaveGlb(document, "drawing.glb", options)` produces binary glTF. Both return the same `DwgSceneResult` report.
 
 The documentation site with the API reference is at <https://ioextend.github.io/DwgIO/>. [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/IOExtend/DwgIO) offers an automatically generated overview of the repository.
 
@@ -185,7 +185,7 @@ The documentation site with the API reference is at <https://ioextend.github.io/
 | AC1012 | R13 | flat section locators | planned |
 | AC1014 | R14 | flat section locators | planned |
 | AC1015 | R2000 | flat section locators | planned |
-| AC1018 | R2004 | paged, compressed sections | done (implemented; not yet verified on a real drawing) |
+| AC1018 | R2004 | paged, compressed sections | verified locally on real drawings |
 | AC1021 | R2007 | Reed-Solomon coded pages | planned |
 | AC1024 | R2010 | paged, compressed sections | done |
 | AC1027 | R2013 | paged, compressed sections | done |

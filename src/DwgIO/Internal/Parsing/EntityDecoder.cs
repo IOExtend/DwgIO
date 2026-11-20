@@ -10,8 +10,6 @@ namespace DwgIO.Internal.Parsing;
 /// </summary>
 internal static class EntityDecoder
 {
-    private const ushort DictionaryTypeCode = 0x2A;
-
     /// <summary>
     /// Name for a fixed type code, via <see cref="DwgObjectTypes.Name"/>.
     /// </summary>
@@ -60,7 +58,7 @@ internal static class EntityDecoder
             reader.SkipBytes((int)graphicsSize);
         }
 
-        reader.ReadTwoBits(); // entity mode
+        bool isModelSpace = reader.ReadTwoBits() == 2;
         reader.ReadPackedInt(); // reactor count: back-reference handles consumed from the tail later
         reader.ReadBit(); // no extension dictionary flag (R2004+)
         if (year >= 2013)
@@ -128,6 +126,7 @@ internal static class EntityDecoder
             Geometry = body?.geometry,
             ColorIndex = colorIndex,
             LineTypeScale = lineTypeScale,
+            IsModelSpace = isModelSpace,
         };
     }
 

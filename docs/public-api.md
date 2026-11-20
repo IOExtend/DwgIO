@@ -35,7 +35,7 @@ change in any release and is visible only to the test project through `Internals
 | `DwgHandleMap`, `DwgHandleMapEntry` | The handle to offset index of the object stream; `Find(handle)` looks up one object. |
 | `DwgObjectInfo`, `DwgHandle` | One record of the object stream: offset, size, type code (`TypeName` names it) and handle. |
 | `DwgEntity`, `DwgEntityKind` | A decoded entity: handle, type, colour, linetype scale and, for LINE, CIRCLE, ARC and POINT, its `Geometry`. |
-| `DwgAppInfoHistory` (list on `DwgDocument.AppInfoHistory`) | The producer records of the earlier saves, from `AcDb:AppInfoHistory` (best effort: the section's layout is undocumented, so the walk stops with a diagnostic where a record does not decode). |
+| `DwgDocument.AppInfoHistory` | Decompressed bytes of `AcDb:AppInfoHistory` when available. The record layout is unknown. |
 | `DwgRevHistory` | The save references of `AcDb:RevHistory`: layout version pair and one value per recorded save. |
 | `DwgAuxHeader` | The auxiliary header of `AcDb:AuxHeader`: version pair, save counter, creation and last-update times, next handle. |
 | `DwgTemplate` | The template description of `AcDb:Template`: description and unit system (English/metric). |
@@ -57,7 +57,8 @@ DwgJsonExporter.WriteFile(doc, "drawing.json", DwgJsonExportOptions.Default);
 
 The export has the objects `file`, `version`, `containerHeader`, `summaryInfo`, `appInfo`, `preview`, `fileDepList`
 and `objects`, the numbers `pageCount` and `entityCount`, the `entities` array and the `sections` array. An object whose data the drawing does not hold is left
-out.
+out. In `objects`, `byType` keeps hexadecimal keys and `byTypeName` gives the same counts by readable name.
+For `appInfoHistory`, the export reports the byte size. Section bytes can be embedded with `IncludeSectionContents`.
 
 ## Scene export (`DwgIO.Scene` package)
 
@@ -82,7 +83,9 @@ IOScene.SceneJson.Save(result.Document, "drawing.scene.json");
 ```
 
 The scene validates against the IOScene contract (`SceneDocument.Validate` reports no error) and round-trips through
-the IOScene JSON format, so it can be fed to the IOScene tools, viewers and exporters. `DwgSceneExport` writes it to
+the IOScene JSON format, so it can be fed to the IOScene tools, viewers and exporters. For HTML display, IOViewer
+0.3.1 represents lines and points with thin triangle geometry. The scene and exchange exports retain the original
+line and point geometry. `DwgSceneExport` writes it to
 OBJ (with an MTL colour library) and GLB through the IOScene.Formats writers.
 
 ## Diagnostics

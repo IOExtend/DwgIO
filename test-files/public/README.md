@@ -1,6 +1,6 @@
 # Redistributable test drawings (#33)
 
-This folder holds small DWG files whose licence allows redistribution, one per supported release
+This folder is reserved for small DWG files whose licence allows redistribution, one per supported release
 (AC1018, AC1024, AC1027, AC1032 — then AC1012 to AC1015 as the readers for those land). The fixture tests
 run over every drawing in the fixture folders, so a drawing committed here turns its skipped tests into
 real runs in CI on all three systems.

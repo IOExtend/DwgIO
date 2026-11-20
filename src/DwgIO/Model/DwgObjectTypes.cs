@@ -104,10 +104,10 @@ public static class DwgObjectTypes
             : typeCode >= 500 ? $"Class_{typeCode}" : $"Object_{typeCode:X}";
 
     /// <summary>Tells whether a record of this code is a drawable entity: the 0x01-0x2F range without
-    /// DICTIONARY (0x2A), plus LWPOLYLINE, HATCH, OLE2FRAME and PROXY_ENTITY. Class-defined codes
+    /// the reserved 0x09 and DICTIONARY (0x2A), plus LWPOLYLINE, HATCH, OLE2FRAME and PROXY_ENTITY. Class-defined codes
     /// (500+) are entities when their class says so; without a decoded class list they are treated as objects.</summary>
     public static bool IsEntity(ushort typeCode) =>
-        (typeCode is >= 0x01 and <= 0x2F && typeCode != 0x2A) || ExtraEntities.Contains(typeCode);
+        (typeCode is >= 0x01 and <= 0x2F and not (0x09 or 0x2A)) || ExtraEntities.Contains(typeCode);
 
     /// <summary>Every fixed type name the table knows, for validating a filter list.</summary>
     public static IReadOnlyCollection<string> KnownNames => FixedNames.Values;

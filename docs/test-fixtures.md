@@ -2,9 +2,9 @@
 
 Most tests build their input in the test itself (cipher, decompression, checksums, bit reading, version detection,
 handle map, object stream and metadata parsing) and run everywhere. The fixture tests in `DwgFixtureTests` need real
-drawings. The repository ships no private drawings — `test_files/` is ignored by git — but small redistributable
-drawings are committed under `test-files/public` (see its README for the origin and licence rules) and turn the
-skipped fixture tests into real runs, including in CI on Windows, Linux and macOS.
+drawings. The repository ships no drawings yet. Private fixtures belong in the ignored test folder or outside the
+repository. Small redistributable drawings can be added under `test-files/public`. Once available, the fixture
+tests will use them in CI on Windows, Linux and macOS.
 
 ## Where the drawings are looked for
 
@@ -17,8 +17,8 @@ of these folders together:
 - a folder `test_files` in the repository root (or in any parent of the test binary folder).
 
 Every `*.dwg` file directly in such a folder or in one level of subfolders is used, whatever its name. Drawings of the
-supported releases (AC1024, AC1027, AC1032) are the useful ones; AC1018 (R2004) is implemented but no
-drawing of that release has been read yet, so an AC1018 fixture is especially valuable. Drawings of an unsupported version
+supported releases (AC1018, AC1024, AC1027, AC1032) are the useful ones. AC1018 has been checked on real local drawings and
+still needs a redistributable fixture. Drawings of an unsupported version
 (AC1012 to AC1015, AC1021) are ignored by the fixture tests and counted in the skip reason, so one file of a
 planned release does not fail every test.
 

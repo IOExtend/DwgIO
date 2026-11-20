@@ -25,6 +25,7 @@ public class EntityTypeTests
 
     [Theory]
     [InlineData(0x00)] // UNUSED
+    [InlineData(0x09)] // reserved in the supported versions
     [InlineData(0x30)] // BLOCK CONTROL OBJ
     public void ObjectsAndOutOfRangeCodes_AreNotEntities(ushort typeCode)
     {

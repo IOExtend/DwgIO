@@ -1,5 +1,7 @@
 using System.Buffers.Binary;
 using System.Text.RegularExpressions;
+using System.Xml;
+using System.Xml.Linq;
 using DwgIO.Model;
 
 namespace DwgIO.Internal.Parsing;
@@ -24,33 +26,18 @@ internal static partial class AppInfoParser
     [GeneratedRegex("build_version=\\\\?\"([^\"\\\\]+)")]
     private static partial Regex BuildVersionRegex();
 
-    [GeneratedRegex("(?:^|[\\s])name\\s*=\\\\?\"([^\"\\\\]+)")]
+    [GeneratedRegex("""(?:^|\s)name\s*=\s*"(?<name>[^"]*)"|(?:^|\s)name\s*=\s*'(?<name>[^']*)'""")]
     private static partial Regex ProductNameRegex();
 
     /// <summary>Parses an AppInfo payload; <paramref name="codepage"/> decodes 8-bit strings.</summary>
-    public static DwgAppInfo Parse(byte[] data, int codepage) => ParseOne(data, codepage, out _);
-
-    /// <summary>
-    /// Parses one AppInfo record from the start of <paramref name="data"/> and reports how many bytes it
-    /// consumed, so a sequence of records (the <c>AcDb:AppInfoHistory</c> section) can be walked.
-    /// </summary>
-    internal static DwgAppInfo ParseOne(byte[] data, int codepage, out int consumed)
+    public static DwgAppInfo Parse(byte[] data, int codepage)
     {
-        if (data.Length >= 4)
+        if (data.Length >= 4 && BinaryPrimitives.ReadUInt32LittleEndian(data) is 2 or 3
+            && TryParseUnicode(data, codepage) is { } unicodeInfo)
         {
-            uint marker = BinaryPrimitives.ReadUInt32LittleEndian(data);
-            if (marker is 2 or 3)
-            {
-                var unicodeInfo = TryParseUnicode(data, codepage, out var unicodeConsumed);
-                if (unicodeInfo is not null)
-                {
-                    consumed = unicodeConsumed;
-                    return unicodeInfo;
-                }
-            }
+            return unicodeInfo;
         }
 
-        consumed = ParseAnsi(data, codepage);
         return BuildAnsi(data, codepage);
     }
 
@@ -71,18 +58,6 @@ internal static partial class AppInfoParser
         };
     }
 
-    /// <summary>Consumes one ANSI-layout record and reports its length; throws on a truncated field.</summary>
-    private static int ParseAnsi(byte[] data, int codepage)
-    {
-        var cursor = new MetadataByteCursor(data, codepage);
-        cursor.ReadAnsiString16();
-        cursor.ReadU32();
-        cursor.ReadAnsiString16();
-        cursor.ReadAnsiString16();
-        TryRead(cursor, c => c.ReadAnsiString16());
-        return cursor.Position;
-    }
-
     /// <summary>
     /// UTF-16 layout written by AC1021+ (R2007+) files:
     /// <c>u32 marker, [u16] name, u32 entry count</c>, then <c>count</c> entries of
@@ -91,9 +66,8 @@ internal static partial class AppInfoParser
     /// holds the application version, and the product XML's build_version
     /// attribute is the fallback when the version entry is absent.
     /// </summary>
-    private static DwgAppInfo? TryParseUnicode(byte[] data, int codepage, out int consumed)
+    private static DwgAppInfo? TryParseUnicode(byte[] data, int codepage)
     {
-        consumed = 0;
         try
         {
             var cursor = new MetadataByteCursor(data, codepage);
@@ -121,8 +95,6 @@ internal static partial class AppInfoParser
                     productXml = text;
                 }
             }
-
-            consumed = cursor.Position;
 
             if (version.Length == 0 && productXml.Length > 0
                 && BuildVersionRegex().Match(productXml) is { Success: true } match)
@@ -156,9 +128,25 @@ internal static partial class AppInfoParser
             return string.Empty;
         }
 
-        return ProductNameRegex().Match(productXml) is { Success: true } match
-            ? match.Groups[1].Value
-            : string.Empty;
+        try
+        {
+            using var input = new StringReader(productXml);
+            using var reader = XmlReader.Create(input, new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit });
+            return XElement.Load(reader).Attribute("name")?.Value ?? string.Empty;
+        }
+        catch (XmlException)
+        {
+            if (productXml.Contains("<!DOCTYPE", StringComparison.OrdinalIgnoreCase))
+            {
+                return string.Empty;
+            }
+
+            // Some save applications write fragments or escape attribute quotes in the stored text.
+            string normalized = productXml.Replace("\\\"", "\"", StringComparison.Ordinal);
+            return ProductNameRegex().Match(normalized) is { Success: true } match
+                ? System.Net.WebUtility.HtmlDecode(match.Groups["name"].Value)
+                : string.Empty;
+        }
     }
 
     private static string? TryRead(MetadataByteCursor cursor, Func<MetadataByteCursor, string> read)

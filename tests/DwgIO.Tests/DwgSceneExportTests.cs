@@ -198,6 +198,77 @@ public class DwgSceneExportTests : IDisposable
     }
 
     [Fact]
+    public void SaveObj_FileNameWithSpaces_WritesAnAdjacentLibrary()
+    {
+        string objPath = Path.Combine(_directory, "drawing with spaces.obj");
+
+        DwgSceneExport.SaveObj(SampleDrawing(), objPath);
+
+        string reference = Assert.Single(File.ReadLines(objPath), line => line.StartsWith("mtllib ", StringComparison.Ordinal));
+        Assert.True(File.Exists(Path.Combine(_directory, reference["mtllib ".Length..])));
+    }
+
+    [Fact]
+    public void SaveObj_MaterialExtension_RejectsTheOverlappingDestination()
+    {
+        string path = Path.Combine(_directory, "drawing.mtl");
+        File.WriteAllText(path, "old material");
+
+        Assert.Throws<ArgumentException>(() => DwgSceneExport.SaveObj(SampleDrawing(), path));
+
+        Assert.Equal("old material", File.ReadAllText(path));
+    }
+
+    [Fact]
+    public void SaveObj_Overwrite_PreservesBothFilesAccessRules()
+    {
+        string[] paths = [Path.Combine(_directory, "drawing.obj"), Path.Combine(_directory, "drawing.mtl")];
+        foreach (string path in paths)
+        {
+            File.WriteAllText(path, "old file");
+        }
+
+        const UnixFileMode ownerOnly = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        if (OperatingSystem.IsWindows())
+        {
+            var user = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
+            var acl = new System.Security.AccessControl.FileSecurity();
+            acl.SetAccessRuleProtection(true, preserveInheritance: false);
+            acl.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(user,
+                System.Security.AccessControl.FileSystemRights.FullControl,
+                System.Security.AccessControl.AccessControlType.Allow));
+            foreach (string path in paths)
+            {
+                new FileInfo(path).SetAccessControl(acl);
+            }
+
+            string expected = new FileInfo(paths[0]).GetAccessControl().GetSecurityDescriptorSddlForm(
+                System.Security.AccessControl.AccessControlSections.Access);
+            DwgSceneExport.SaveObj(SampleDrawing(), paths[0]);
+
+            foreach (string path in paths)
+            {
+                Assert.Equal(expected, new FileInfo(path).GetAccessControl().GetSecurityDescriptorSddlForm(
+                    System.Security.AccessControl.AccessControlSections.Access));
+            }
+        }
+        else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+        {
+            foreach (string path in paths)
+            {
+                File.SetUnixFileMode(path, ownerOnly);
+            }
+
+            DwgSceneExport.SaveObj(SampleDrawing(), paths[0]);
+
+            foreach (string path in paths)
+            {
+                Assert.Equal(ownerOnly, File.GetUnixFileMode(path));
+            }
+        }
+    }
+
+    [Fact]
     public void SaveGlb_RoundTripsThroughGlbSceneReader()
     {
         string glbPath = Path.Combine(_directory, "drawing.glb");
