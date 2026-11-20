@@ -3,7 +3,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using DwgIO;
-using DwgIO.Internal.Parsing;
+using DwgIO.Internal;
 using DwgIO.Json;
 using DwgIO.Model;
 using DwgIO.Scene;
@@ -160,6 +160,27 @@ internal static class Program
             }
         }
 
+        if (!doc.AppInfoHistory.IsEmpty)
+        {
+            output.WriteLine($"App history: {Count(doc.AppInfoHistory.Length)} bytes (raw)");
+        }
+
+        if (doc.RevHistory is { } revHistory)
+        {
+            output.WriteLine($"Rev history: layout {revHistory.ClassVersion}.{revHistory.ClassMinor}  saves={Count(revHistory.Histories.Count)}");
+        }
+
+        if (doc.AuxHeader is { } auxHeader)
+        {
+            output.WriteLine($"Aux header: saves={Count(auxHeader.Numsaves)}  created={auxHeader.CreatedUtc:yyyy-MM-dd HH:mm} UTC  updated={auxHeader.ModifiedUtc:yyyy-MM-dd HH:mm} UTC  handseed={auxHeader.Handseed:X}");
+        }
+
+        if (doc.Template is { } template)
+        {
+            string units = template.IsMetric ? "metric" : "english";
+            output.WriteLine($"Template: \"{Truncate(template.Description, 60)}\"  units={units}");
+        }
+
         if (doc.Preview is { } preview)
         {
             output.WriteLine($"Preview: {preview.ImageKind} {Count(preview.ImageBytes.Length)} bytes");
@@ -177,9 +198,9 @@ internal static class Program
         if (doc.Objects.Count > 0)
         {
             output.WriteLine($"Objects: {Count(doc.Objects.Count)}  (handle map: {Count(doc.HandleMap?.Count ?? 0)})");
-            foreach (var group in doc.Objects.GroupBy(o => o.TypeCode).OrderByDescending(g => g.Count()).Take(8))
+            foreach (var group in doc.Objects.GroupBy(o => o.TypeName).OrderByDescending(g => g.Count()).Take(8))
             {
-                output.WriteLine($"  type 0x{group.Key:X3}: {Count(group.Count())}");
+                output.WriteLine($"  {group.Key}: {Count(group.Count())}");
             }
         }
 
@@ -296,7 +317,7 @@ internal static class Program
         {
             if (args[i] == "--scale")
             {
-                if (i + 1 >= args.Length || !double.TryParse(args[i + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out scale) || scale <= 0)
+                if (i + 1 >= args.Length || !double.TryParse(args[i + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out scale) || !double.IsFinite(scale) || scale <= 0)
                 {
                     error.WriteLine("error: --scale needs a positive number of pixels per drawing unit.");
                     return ExitUsage;
@@ -363,7 +384,7 @@ internal static class Program
         }
 
         var result = DwgSceneReader.Read(positional[0], options);
-        SceneJson.Save(result.Document, positional[1]);
+        AtomicOutput.Write(positional[1], stream => SceneJson.Write(result.Document, stream));
         output.WriteLine(
             $"{result.Document.Title}: {Count(result.ElementCount)} elements ({Count(result.ElementsWithGeometry)} with geometry)  ->  {positional[1]}");
         foreach (var diagnostic in result.Diagnostics.Take(5))
@@ -394,6 +415,12 @@ internal static class Program
     /// <summary>Writes the thumbnail of an opened document. Internal for the CLI tests.</summary>
     internal static int PreviewDocument(DwgDocument doc, string requested, TextWriter output, TextWriter error)
     {
+        if (doc.PreviewReadError is not null)
+        {
+            error.WriteLine($"error: {doc.PreviewReadError}");
+            return ExitParseError;
+        }
+
         var preview = doc.Preview;
         if (preview is null || !preview.HasImage)
         {
@@ -459,6 +486,8 @@ internal static class Program
                 case "--json":
                     json = true;
                     break;
+                case string option when option.StartsWith('-'):
+                    return UnknownOption(option, output, error);
                 default:
                     if (file is not null)
                     {
@@ -483,13 +512,19 @@ internal static class Program
                     continue;
                 }
 
-                if (!EntityDecoder.KnownTypeNames.Contains(trimmed))
+                if (!DwgObjectTypes.KnownNames.Contains(trimmed))
                 {
                     error.WriteLine($"error: unknown type '{trimmed}'. Known types include LINE, CIRCLE, ARC, POINT, TEXT and MTEXT.");
                     return ExitUsage;
                 }
 
                 filter.Add(trimmed);
+            }
+
+            if (filter.Count == 0)
+            {
+                error.WriteLine("error: --type needs at least one type name.");
+                return ExitUsage;
             }
         }
 

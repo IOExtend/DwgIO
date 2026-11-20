@@ -36,6 +36,10 @@ public sealed class DwgDocument
                 AppInfo = TryReadMetadata("AcDb:AppInfo", b => AppInfoParser.Parse(b, fileHeader.Codepage));
                 FileDepList = TryReadMetadata("AcDb:FileDepList", b => FileDepListParser.Parse(b, fileHeader.Codepage));
                 Preview = ReadOptionalPreview();
+                AppInfoHistory = ReadAppInfoHistory();
+                RevHistory = TryReadMetadata("AcDb:RevHistory", b => RevHistoryParser.Parse(b));
+                AuxHeader = TryReadMetadata("AcDb:AuxHeader", b => AuxHeaderParser.Parse(b));
+                Template = TryReadMetadata("AcDb:Template", b => TemplateParser.Parse(b, fileHeader.Codepage));
             }
 
             if (options.ReadObjects)
@@ -74,11 +78,25 @@ public sealed class DwgDocument
     /// <summary>Producer information from <c>AcDb:AppInfo</c>, when present.</summary>
     public DwgAppInfo? AppInfo { get; }
 
+    /// <summary>The decompressed AcDb:AppInfoHistory payload when read. Its record layout is unknown.</summary>
+    public ReadOnlyMemory<byte> AppInfoHistory { get; }
+
+    /// <summary>The save references of <c>AcDb:RevHistory</c>, when present.</summary>
+    public DwgRevHistory? RevHistory { get; }
+
+    /// <summary>The auxiliary header of <c>AcDb:AuxHeader</c>, when present (save counters and drawing times).</summary>
+    public DwgAuxHeader? AuxHeader { get; }
+
+    /// <summary>The template description of <c>AcDb:Template</c>, when present.</summary>
+    public DwgTemplate? Template { get; }
+
     /// <summary>External file dependencies from <c>AcDb:FileDepList</c>, when present.</summary>
     public DwgFileDepList? FileDepList { get; }
 
     /// <summary>Embedded thumbnail from <c>AcDb:Preview</c>, when present.</summary>
     public DwgPreview? Preview { get; }
+
+    internal string? PreviewReadError { get; private set; }
 
     /// <summary>Handle→offset index from <c>AcDb:Handles</c> (R2004-family files, ReadObjects on).</summary>
     public DwgHandleMap? HandleMap { get; }
@@ -93,7 +111,8 @@ public sealed class DwgDocument
     public IReadOnlyList<string> Diagnostics { get; } = [];
 
     /// <summary>Creates an in-memory document over a file header and a fixed entity list (tests).</summary>
-    internal DwgDocument(string path, DwgFileHeader fileHeader, IReadOnlyList<DwgEntity> entities, DwgPreview? preview = null)
+    internal DwgDocument(string path, DwgFileHeader fileHeader, IReadOnlyList<DwgEntity> entities,
+        DwgPreview? preview = null, IReadOnlyList<DwgObjectInfo>? objects = null)
     {
         Path = path;
         _fileBytes = [];
@@ -103,6 +122,7 @@ public sealed class DwgDocument
         Diagnostics = _diagnostics;
         Entities = entities;
         Preview = preview;
+        Objects = objects ?? [];
     }
 
     /// <summary>Creates a document over a container built in the tests; reads follow <paramref name="options"/>.</summary>
@@ -138,6 +158,50 @@ public sealed class DwgDocument
         }
     }
 
+    /// <summary>
+    /// Opens and parses a DWG from a stream (a network handle, an archive entry, an already-open file). The
+    /// stream is read to the end into memory once, so the results are identical to <see cref="Open(string, DwgReaderOptions?)"/>
+    /// on the same bytes; <paramref name="documentName"/> names the document in <see cref="Path"/>, error
+    /// messages and exports (the default is "stream").
+    /// </summary>
+    /// <exception cref="ArgumentException">The stream cannot be read.</exception>
+    /// <exception cref="DwgUnsupportedVersionException">The file's container is not implemented yet (R13-R2000, R2007).</exception>
+    /// <exception cref="DwgException">The file is corrupt or truncated.</exception>
+    public static DwgDocument Open(Stream stream, string? documentName = null, DwgReaderOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        if (!stream.CanRead)
+        {
+            throw new ArgumentException("The stream cannot be read.", nameof(stream));
+        }
+
+        options ??= DwgReaderOptions.Default;
+        string name = string.IsNullOrEmpty(documentName) ? "stream" : documentName;
+        long? expectedLength = stream.CanSeek ? stream.Length - stream.Position : null;
+        byte[] fileBytes;
+        try
+        {
+            using var buffer = expectedLength is long length and >= 0
+                ? new MemoryStream((int)Math.Min(length, int.MaxValue))
+                : new MemoryStream();
+            stream.CopyTo(buffer);
+            fileBytes = buffer.ToArray();
+        }
+        catch (Exception ex) when (ex is not DwgException && IsParseFailure(ex))
+        {
+            throw Corrupt(ex);
+        }
+
+        try
+        {
+            return Parse(name, fileBytes, options);
+        }
+        catch (Exception ex) when (ex is not DwgException && IsParseFailure(ex))
+        {
+            throw Corrupt(ex);
+        }
+    }
+
     private static DwgDocument Parse(string path, byte[] fileBytes, DwgReaderOptions options)
     {
         var fileHeader = DwgFileHeader.Parse(fileBytes);
@@ -145,7 +209,7 @@ public sealed class DwgDocument
         if (fileHeader.Version.Family != DwgContainerFamily.R2004Family)
         {
             throw new DwgUnsupportedVersionException(
-                $"{fileHeader.Version.Release} ({fileHeader.Version.Magic}) is not supported yet: " +
+                $"{path}: {fileHeader.Version.Release} ({fileHeader.Version.Magic}) is not supported yet: " +
                 (fileHeader.Version.Family == DwgContainerFamily.R2007
                     ? "the R2007 container is planned."
                     : "the R13-R2000 container is planned."));
@@ -244,9 +308,13 @@ public sealed class DwgDocument
                 ? null
                 : HandleMap.Entries.Select(e => e.Offset).Distinct().OrderBy(o => o).ToList();
             var objects = ObjectStreamWalker.Walk(_objectStreamBytes, r2010Plus: FileHeader.Version.Year >= 2010, mapOffsets, _diagnostics.Add);
-            if (HandleMap is { Count: > 0 } map && objects.Count < map.Count)
+            if (HandleMap is { Count: > 0 } map)
             {
-                _diagnostics.Add($"AcDb:AcDbObjects: inventory holds {objects.Count} records; the handle map lists {map.Count} entries ({map.Count - objects.Count} unreached)");
+                int missing = CountUnreachedObjects(objects, map);
+                if (missing > 0)
+                {
+                    _diagnostics.Add($"AcDb:AcDbObjects: inventory holds {objects.Count} records; {missing} of {map.Count} handle-map entries were unreached");
+                }
             }
 
             return objects;
@@ -256,6 +324,12 @@ public sealed class DwgDocument
             _diagnostics.Add($"AcDb:AcDbObjects: {ex.Message}");
             return [];
         }
+    }
+
+    internal static int CountUnreachedObjects(IReadOnlyList<DwgObjectInfo> objects, DwgHandleMap map)
+    {
+        var reached = objects.Select(o => (o.Handle, (ulong)o.StreamOffset)).ToHashSet();
+        return map.Entries.Count(e => !reached.Contains((e.Handle, e.Offset)));
     }
 
     private List<DwgEntity> ReadOptionalEntities()
@@ -290,10 +364,32 @@ public sealed class DwgDocument
         return entities;
     }
 
+    private ReadOnlyMemory<byte> ReadAppInfoHistory()
+    {
+        if (!TryGetReadableSection("AcDb:AppInfoHistory", out var entry))
+        {
+            return ReadOnlyMemory<byte>.Empty;
+        }
+
+        try
+        {
+            return ReadSectionCore(entry);
+        }
+        catch (Exception ex) when (IsParseFailure(ex))
+        {
+            _diagnostics.Add($"AcDb:AppInfoHistory: {ex.Message}");
+            return ReadOnlyMemory<byte>.Empty;
+        }
+    }
+
     private DwgPreview? ReadOptionalPreview()
     {
         if (!TryGetReadableSection("AcDb:Preview", out var entry))
         {
+            if (entry is not null)
+            {
+                PreviewReadError = _diagnostics[^1];
+            }
             return null;
         }
 
@@ -305,7 +401,8 @@ public sealed class DwgDocument
         }
         catch (Exception ex) when (IsParseFailure(ex))
         {
-            _diagnostics.Add($"AcDb:Preview: {ex.Message}");
+            PreviewReadError = $"AcDb:Preview: {ex.Message}";
+            _diagnostics.Add(PreviewReadError);
             return null;
         }
     }

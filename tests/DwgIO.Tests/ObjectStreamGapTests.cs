@@ -71,6 +71,21 @@ public class ObjectStreamGapTests
     }
 
     [Fact]
+    public void CountUnreachedObjects_UsesBothHandleAndOffset()
+    {
+        var stream = new RecordBitWriter();
+        stream.WriteRecord(r => r.WriteLineRecord());
+        var objects = ObjectStreamWalker.Walk(stream.ToArray(), r2010Plus: true);
+        var item = Assert.Single(objects);
+        var map = new DwgHandleMap
+        {
+            Entries = [new DwgHandleMapEntry(item.Handle, (ulong)item.StreamOffset + 1)],
+        };
+
+        Assert.Equal(1, DwgDocument.CountUnreachedObjects(objects, map));
+    }
+
+    [Fact]
     public void Walk_TruncatedTailWithoutRecovery_ReportsTheStop()
     {
         var stream = new RecordBitWriter();
