@@ -32,7 +32,8 @@ Sections are named as stored in the drawing, for example `AcDb:Header`, `AcDb:Cl
 | 1 | The command line is wrong. |
 | 2 | The input file does not exist. |
 | 3 | The DWG version is not supported yet or not recognised. |
-| 4 | The file could not be parsed, the drawing has no thumbnail preview (`preview`), or an unexpected error occurred. |
+| 4 | The file could not be parsed, or an unexpected error occurred. |
+| 5 | The drawing has no thumbnail preview (`preview`). |
 
 ## Library
 
