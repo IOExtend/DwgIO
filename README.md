@@ -113,7 +113,7 @@ dwgio drawing.dwg - | jq .summaryInfo
 
 ## Library
 
-Open a drawing, list its sections and read one of them:
+Open a drawing (from a path or from a stream — a network handle, an archive entry, an already-open file; the stream is read to memory once and `Open(Stream)` gives the same results as `Open(path)`), list its sections and read one of them:
 
 ```csharp
 using System;
@@ -122,6 +122,9 @@ using DwgIO;
 var doc = DwgDocument.Open("drawing.dwg");
 
 Console.WriteLine($"{doc.Version.Release} ({doc.Version.Magic})");
+
+// or from a stream:
+// var doc = DwgDocument.Open(httpResponse.Content.ReadAsStream(), "remote.dwg");
 
 foreach (var section in doc.Sections)
 {

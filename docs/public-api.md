@@ -12,7 +12,7 @@ change in any release and is visible only to the test project through `Internals
 
 | Type | Use |
 |---|---|
-| `DwgDocument` | Opens a drawing (`Open`) and gives its version, file and container headers, section catalog, metadata, handle map, object inventory, entities and `Diagnostics`. `ReadSection(name)` returns the decompressed bytes of one named section. |
+| `DwgDocument` | Opens a drawing (`Open(path, options?)` or `Open(stream, documentName?, options?)`) and gives its version, file and container headers, section catalog, metadata, handle map, object inventory, entities and `Diagnostics`. `ReadSection(name)` returns the decompressed bytes of one named section. |
 | `DwgReaderOptions` | What `Open` reads: `ReadSectionMap`, `ReadSummaryInfo`, `ReadMetadata`, `ReadObjects`, `ReadEntities` (all on by default) and `VerifyChecksums` (off by default). |
 | `DwgException` | Thrown for a damaged or truncated file, and by `ReadSection` for an unknown section name, a document opened without its section map, or a checksum mismatch when `VerifyChecksums` is on. |
 | `DwgUnsupportedVersionException` | Thrown when the version is not recognised or its container is not implemented yet (R13 to R2000, R2007). Derives from `DwgException`. |

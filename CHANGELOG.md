@@ -7,6 +7,10 @@ API between minor releases.
 ## [Unreleased]
 
 ### Added
+- `DwgDocument.Open(Stream, documentName?, options?)`: a drawing can now come from a stream (a network
+  handle, an archive entry, an already-open file). The stream is read to memory once, so the results are
+  identical to `Open(path)` on the same bytes; the unsupported-version message names the source (#37, first
+  step — reading data pages on demand remains open).
 - `AcDb:AppInfoHistory`, `AcDb:RevHistory`, `AcDb:AuxHeader` and `AcDb:Template` parsing: the earlier saves'
   producer records (best effort, the section's layout is undocumented), the save references, the auxiliary
   header (save counter, drawing times, next handle) and the template description with its unit system. Each is

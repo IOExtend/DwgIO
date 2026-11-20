@@ -156,6 +156,50 @@ public sealed class DwgDocument
         }
     }
 
+    /// <summary>
+    /// Opens and parses a DWG from a stream (a network handle, an archive entry, an already-open file). The
+    /// stream is read to the end into memory once, so the results are identical to <see cref="Open(string, DwgReaderOptions?)"/>
+    /// on the same bytes; <paramref name="documentName"/> names the document in <see cref="Path"/>, error
+    /// messages and exports (the default is "stream").
+    /// </summary>
+    /// <exception cref="ArgumentException">The stream cannot be read.</exception>
+    /// <exception cref="DwgUnsupportedVersionException">The file's container is not implemented yet (R13-R2000, R2007).</exception>
+    /// <exception cref="DwgException">The file is corrupt or truncated.</exception>
+    public static DwgDocument Open(Stream stream, string? documentName = null, DwgReaderOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        if (!stream.CanRead)
+        {
+            throw new ArgumentException("The stream cannot be read.", nameof(stream));
+        }
+
+        options ??= DwgReaderOptions.Default;
+        string name = string.IsNullOrEmpty(documentName) ? "stream" : documentName;
+        long? expectedLength = stream.CanSeek ? stream.Length - stream.Position : null;
+        byte[] fileBytes;
+        try
+        {
+            using var buffer = expectedLength is long length and >= 0
+                ? new MemoryStream((int)Math.Min(length, int.MaxValue))
+                : new MemoryStream();
+            stream.CopyTo(buffer);
+            fileBytes = buffer.ToArray();
+        }
+        catch (Exception ex) when (ex is not DwgException && IsParseFailure(ex))
+        {
+            throw Corrupt(ex);
+        }
+
+        try
+        {
+            return Parse(name, fileBytes, options);
+        }
+        catch (Exception ex) when (ex is not DwgException && IsParseFailure(ex))
+        {
+            throw Corrupt(ex);
+        }
+    }
+
     private static DwgDocument Parse(string path, byte[] fileBytes, DwgReaderOptions options)
     {
         var fileHeader = DwgFileHeader.Parse(fileBytes);
@@ -163,7 +207,7 @@ public sealed class DwgDocument
         if (fileHeader.Version.Family != DwgContainerFamily.R2004Family)
         {
             throw new DwgUnsupportedVersionException(
-                $"{fileHeader.Version.Release} ({fileHeader.Version.Magic}) is not supported yet: " +
+                $"{path}: {fileHeader.Version.Release} ({fileHeader.Version.Magic}) is not supported yet: " +
                 (fileHeader.Version.Family == DwgContainerFamily.R2007
                     ? "the R2007 container is planned."
                     : "the R13-R2000 container is planned."));
