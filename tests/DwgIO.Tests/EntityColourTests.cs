@@ -68,9 +68,9 @@ public class EntityColourTests
         Assert.Equal(256, entities[1].GetProperty("colorIndex").GetInt32());
     }
 
-    private static DwgEntity DecodeLine(Action<RecordWriter> writeColour, bool expectTransparency)
+    private static DwgEntity DecodeLine(Action<RecordBitWriter> writeColour, bool expectTransparency)
     {
-        var writer = new RecordWriter();
+        var writer = new RecordBitWriter();
         writer.WriteRawByte(0x00);              // R2010+ record-size VarUInt placeholder
         writer.WriteTwoBits(0);                 // object type: tag 00 → next byte
         writer.WriteRawByte(0x13);              // LINE
@@ -123,68 +123,4 @@ public class EntityColourTests
         return entity;
     }
 
-    /// <summary>MSB-first bit writer mirroring <see cref="BitReaderMsb"/>'s consumption, for synthetic records.</summary>
-    private sealed class RecordWriter
-    {
-        private readonly List<byte> _bytes = [];
-        private int _bitPos;
-
-        public int BitsUsed => _bitPos == 0 ? _bytes.Count * 8 : (_bytes.Count - 1) * 8 + _bitPos;
-
-        public byte[] ToArray() => [.. _bytes];
-
-        public void WriteBit(bool bit) => WriteBits(bit ? 1ul : 0ul, 1);
-
-        public void WriteTwoBits(uint value) => WriteBits(value, 2);
-
-        public void WriteRawByte(byte value) => WriteBits(value, 8);
-
-        public void WriteRawDouble(double value)
-        {
-            foreach (byte b in BitConverter.GetBytes(value))
-            {
-                WriteRawByte(b);
-            }
-        }
-
-        public void WriteHandle(byte code, byte count)
-        {
-            WriteBits(code, 4);
-            WriteBits(count, 4);
-            for (int i = 0; i < count; i++)
-            {
-                WriteRawByte(0);
-            }
-        }
-
-        /// <summary>Packed short tag 11 → the constant 256 (BYLAYER in the short form).</summary>
-        public void WritePackedShortTag3() => WriteTwoBits(3);
-
-        /// <summary>Packed short tag 00 followed by the two little-endian bytes of a full-width value.</summary>
-        public void WritePackedShortRaw(ushort value)
-        {
-            WriteTwoBits(0);
-            WriteRawByte((byte)(value & 0xFF));
-            WriteRawByte((byte)(value >> 8));
-        }
-
-        private void WriteBits(ulong value, int n)
-        {
-            for (int i = n - 1; i >= 0; i--)
-            {
-                if (_bitPos == 0)
-                {
-                    _bytes.Add(0);
-                }
-
-                int index = _bytes.Count - 1;
-                if ((value >> i & 1) != 0)
-                {
-                    _bytes[index] |= (byte)(0x80 >> _bitPos);
-                }
-
-                _bitPos = (_bitPos + 1) & 7;
-            }
-        }
-    }
 }

@@ -124,6 +124,150 @@ public class DwgSceneExportTests : IDisposable
         Assert.Empty(Directory.EnumerateFiles(_directory, ".dwgio-*"));
     }
 
+    [SkippableFact]
+    public void SaveObj_SecondMoveFailure_KeepsTheOldPair()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new SkipException("The failure injection relies on a Windows file lock; on Unix the rename succeeds regardless.");
+        }
+
+        string objPath = Path.Combine(_directory, "drawing.obj");
+        string mtlPath = Path.Combine(_directory, "drawing.mtl");
+        File.WriteAllText(objPath, "old obj");
+        File.WriteAllText(mtlPath, "old mtl");
+        byte[] oldObj = File.ReadAllBytes(objPath);
+        byte[] oldMtl = File.ReadAllBytes(mtlPath);
+
+        // The OBJ destination is held open exclusively, so the last step of the replace fails.
+        using (var lockStream = new FileStream(objPath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            // The move failure surfaces as IOException or UnauthorizedAccessException depending on the obstacle.
+            var failure = Record.Exception(() => DwgSceneExport.SaveObj(SampleDrawing(), objPath));
+            Assert.True(failure is IOException or UnauthorizedAccessException, $"unexpected {failure?.GetType().Name}");
+        }
+
+        // The old pair survives together: the old OBJ still names its own old MTL.
+        Assert.Equal(oldObj, File.ReadAllBytes(objPath));
+        Assert.Equal(oldMtl, File.ReadAllBytes(mtlPath));
+        Assert.Empty(Directory.EnumerateFiles(_directory, ".dwgio-*"));
+    }
+
+    [SkippableFact]
+    public void SaveObj_FirstMoveFailure_KeepsTheOldPair()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new SkipException("The failure injection relies on a Windows file lock; on Unix the rename succeeds regardless.");
+        }
+
+        string objPath = Path.Combine(_directory, "drawing.obj");
+        string mtlPath = Path.Combine(_directory, "drawing.mtl");
+        File.WriteAllText(objPath, "old obj");
+        File.WriteAllText(mtlPath, "old mtl");
+        byte[] oldObj = File.ReadAllBytes(objPath);
+        byte[] oldMtl = File.ReadAllBytes(mtlPath);
+
+        // The old MTL cannot step aside, so the export aborts before anything is replaced.
+        using (var lockStream = new FileStream(mtlPath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            // The move failure surfaces as IOException or UnauthorizedAccessException depending on the obstacle.
+            var failure = Record.Exception(() => DwgSceneExport.SaveObj(SampleDrawing(), objPath));
+            Assert.True(failure is IOException or UnauthorizedAccessException, $"unexpected {failure?.GetType().Name}");
+        }
+
+        Assert.Equal(oldObj, File.ReadAllBytes(objPath));
+        Assert.Equal(oldMtl, File.ReadAllBytes(mtlPath));
+        Assert.Empty(Directory.EnumerateFiles(_directory, ".dwgio-*"));
+    }
+
+    [Fact]
+    public void SaveObj_FailedFreshExport_WritesNothing()
+    {
+        // The OBJ destination is a directory, so the final move fails on every platform.
+        string objPath = Path.Combine(_directory, "drawing.obj");
+        Directory.CreateDirectory(objPath);
+
+        // The move failure surfaces as IOException or UnauthorizedAccessException depending on the obstacle.
+            var failure = Record.Exception(() => DwgSceneExport.SaveObj(SampleDrawing(), objPath));
+            Assert.True(failure is IOException or UnauthorizedAccessException, $"unexpected {failure?.GetType().Name}");
+
+        // A fresh export that fails leaves nothing: no half-written MTL beside the pair.
+        Assert.False(File.Exists(Path.Combine(_directory, "drawing.mtl")));
+        Assert.Empty(Directory.EnumerateFiles(_directory, ".dwgio-*"));
+    }
+
+    [Fact]
+    public void SaveObj_FileNameWithSpaces_WritesAnAdjacentLibrary()
+    {
+        string objPath = Path.Combine(_directory, "drawing with spaces.obj");
+
+        DwgSceneExport.SaveObj(SampleDrawing(), objPath);
+
+        string reference = Assert.Single(File.ReadLines(objPath), line => line.StartsWith("mtllib ", StringComparison.Ordinal));
+        Assert.True(File.Exists(Path.Combine(_directory, reference["mtllib ".Length..])));
+    }
+
+    [Fact]
+    public void SaveObj_MaterialExtension_RejectsTheOverlappingDestination()
+    {
+        string path = Path.Combine(_directory, "drawing.mtl");
+        File.WriteAllText(path, "old material");
+
+        Assert.Throws<ArgumentException>(() => DwgSceneExport.SaveObj(SampleDrawing(), path));
+
+        Assert.Equal("old material", File.ReadAllText(path));
+    }
+
+    [Fact]
+    public void SaveObj_Overwrite_PreservesBothFilesAccessRules()
+    {
+        string[] paths = [Path.Combine(_directory, "drawing.obj"), Path.Combine(_directory, "drawing.mtl")];
+        foreach (string path in paths)
+        {
+            File.WriteAllText(path, "old file");
+        }
+
+        const UnixFileMode ownerOnly = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        if (OperatingSystem.IsWindows())
+        {
+            var user = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
+            foreach (string path in paths)
+            {
+                var acl = new System.Security.AccessControl.FileSecurity();
+                acl.SetAccessRuleProtection(true, preserveInheritance: false);
+                acl.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(user,
+                    System.Security.AccessControl.FileSystemRights.FullControl,
+                    System.Security.AccessControl.AccessControlType.Allow));
+                new FileInfo(path).SetAccessControl(acl);
+            }
+
+            string expected = new FileInfo(paths[0]).GetAccessControl().GetSecurityDescriptorSddlForm(
+                System.Security.AccessControl.AccessControlSections.Access);
+            DwgSceneExport.SaveObj(SampleDrawing(), paths[0]);
+
+            foreach (string path in paths)
+            {
+                Assert.Equal(expected, new FileInfo(path).GetAccessControl().GetSecurityDescriptorSddlForm(
+                    System.Security.AccessControl.AccessControlSections.Access));
+            }
+        }
+        else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+        {
+            foreach (string path in paths)
+            {
+                File.SetUnixFileMode(path, ownerOnly);
+            }
+
+            DwgSceneExport.SaveObj(SampleDrawing(), paths[0]);
+
+            foreach (string path in paths)
+            {
+                Assert.Equal(ownerOnly, File.GetUnixFileMode(path));
+            }
+        }
+    }
+
     [Fact]
     public void SaveGlb_RoundTripsThroughGlbSceneReader()
     {

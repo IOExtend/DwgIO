@@ -25,6 +25,10 @@ public sealed record DwgObjectInfo
     /// <summary>Object type code (e.g. LINE, LWPOLYLINE).</summary>
     public required ushort TypeCode { get; init; }
 
+    /// <summary>Name for <see cref="TypeCode"/>: the AutoCAD or table name, or <c>Object_XX</c>/<c>Class_XX</c>
+    /// when the code is not in the fixed table (see <see cref="DwgObjectTypes"/>).</summary>
+    public string TypeName => DwgObjectTypes.Name(TypeCode);
+
     /// <summary>Absolute object handle as read from the record (the value of <see cref="StreamHandle"/>).</summary>
     public required ulong Handle { get; init; }
 
