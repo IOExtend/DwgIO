@@ -6,6 +6,8 @@ API between minor releases.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-20
+
 ### Added
 - `DwgIO.Scene.Adapter` provides scene conversion with only DwgIO and IOScene as dependencies.
   The `DwgIO.Scene` package retains its export API and forwards the existing conversion types.
@@ -31,7 +33,7 @@ API between minor releases.
 - `dwgio entities <file.dwg> [--type LINE,CIRCLE] [--json]` lists decoded entities one line each or as a JSON
   array, with the type filter validated against the known type names (#19). The JSON export writes to standard
   output when the target is `-` (#19).
-- `DwgIO.Scene` package: converts a drawing into a neutral [IOScene](https://www.nuget.org/packages/IOScene) scene
+- `DwgSceneReader` converts a drawing into a neutral [IOScene](https://www.nuget.org/packages/IOScene) scene
   document, the shared scene model of the IOExtend tools. One element per decoded entity with the handle as
   `SourceId`, line and point geometries scaled to metres (`DwgSceneOptions.LengthUnit`), ACI colours on the
   placements and a conversion report (`DwgSceneResult`). The scene passes the IOScene structural validation and
@@ -39,7 +41,7 @@ API between minor releases.
 - `dwgio scene <file.dwg> <out.json> [--unit mm|cm|m|ft|in]` writes the scene document.
 - `DwgSceneExport.SaveObj`/`SaveGlb` write a drawing to Wavefront OBJ (with an adjacent MTL colour library,
   written as a pair) and binary glTF (GLB) through the IOScene writers; `dwgio drawing.dwg out.obj` and
-  `dwgio drawing.dwg out.glb` dispatch by extension.
+  `dwgio drawing.dwg out.glb` dispatch by extension. These exporters use `IOScene.Formats` 0.1.0-preview.1.
 - `DwgSvgExporter` and `dwgio svg <file.dwg> <out.svg> [--scale n]` draw model space to SVG (#32): LINE,
   CIRCLE, ARC and POINT in the top view with the y axis up, in their ACI colours, inside a view box that
   contains every exported entity. Polylines, curves and text follow as the core decodes them.
@@ -48,6 +50,11 @@ API between minor releases.
 - `dwgio inspect` is written through a `TextWriter`, so the report is testable directly.
 
 ### Fixed
+- Preview extraction maps image offsets through the section pages, wraps bare bitmaps and keeps WMF images
+  identified as WMF (#10).
+- `AcDb:AppInfo` entries are decoded by identifier, including when the producer writes them out of order (#11).
+- Section reads accept the small trailing size discrepancy found in real drawings and preserve section diagnostics (#12).
+- JSON exports write non-finite geometry values as `null`. File replacement preserves existing access rights (#9).
 - `DwgAppInfo.Product` is filled from the product XML's `name` attribute ("AutoCAD", "AutoCAD LT",
   "Teigha(R)", ...), so `dwgio inspect` and the JSON export name the product instead of an empty string (#35).
 - `dwgio preview` exits with code 5 when the drawing has no thumbnail, distinct from the parse-error code, and
