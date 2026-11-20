@@ -86,6 +86,23 @@ public class EncryptedSectionTests
     }
 
     [Fact]
+    public void JsonExport_ReportsUnreadableSectionWithoutChangingReadDiagnostics()
+    {
+        var document = CreateDocument(Section("AcDb:SummaryInfo", encryption: 1));
+        var diagnostics = new List<string>();
+        using var output = new MemoryStream();
+        var options = new Json.DwgJsonExportOptions { IncludeSectionContents = true, ReportDiagnostic = diagnostics.Add };
+
+        Json.DwgJsonExporter.Write(document, output, options);
+
+        Assert.Empty(document.Diagnostics);
+        Assert.Contains("encrypted", Assert.Single(diagnostics), StringComparison.Ordinal);
+        using var json = System.Text.Json.JsonDocument.Parse(output.ToArray());
+        Assert.Contains("encrypted", json.RootElement.GetProperty("sections")[0].GetProperty("readError").GetString(),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TryGetReadableSection_EncryptedEntry_IsSkippedWithADiagnostic()
     {
         var document = CreateDocument(Section("AcDb:SummaryInfo", encryption: 1));

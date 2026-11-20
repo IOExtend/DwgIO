@@ -7,6 +7,11 @@ API between minor releases.
 ## [Unreleased]
 
 ### Added
+- `DwgIO.Scene.Adapter` provides scene conversion with only DwgIO and IOScene as dependencies.
+  The `DwgIO.Scene` package retains its export API and forwards the existing conversion types.
+- JSON and SVG export options expose a `ReportDiagnostic` callback for export warnings.
+  Document diagnostics cover DWG reads.
+- CI builds the native engine and scene adapter with `BuildNativeCoreOnly` enabled.
 - CI runs the tests on Linux and macOS as well as Windows (both target frameworks), replacing the Linux
   build-only job (#34).
 - `test-files/public`: the folder for committed redistributable test drawings, with the origin and licence

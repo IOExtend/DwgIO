@@ -55,6 +55,18 @@ dotnet test
 The library is in `src/DwgIO`, the CLI in `src/DwgIO.Cli`, and tests in
 `tests/DwgIO.Tests`.
 
+The engine owns DWG reading, its model and the JSON representation of the decoded drawing.
+`DwgIO.Scene.Adapter` uses the public API of `DwgIO` and the IOScene contract. OBJ, GLB, SVG and HTML output
+live in the existing `DwgIO.Scene` package alongside forwards for the adapter types.
+Output file replacement and export diagnostics belong to the writers.
+
+CI also builds the engine and adapter without the compatibility output code or its dependencies.
+Run the compile check with a separate artifact directory.
+
+```sh
+dotnet build src/DwgIO.Scene/DwgIO.Scene.csproj -c Release -p:BuildNativeCoreOnly=true --artifacts-path ./artifacts/native-core-check
+```
+
 Tests that need real drawings are skipped with a message when no drawing is
 available. Set `DWGIO_TEST_FILES` to the folder containing your private
 drawings, or place them in a `test_files` folder, to run them. The repository

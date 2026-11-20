@@ -12,6 +12,9 @@ public sealed class DwgJsonExportOptions
     /// <summary>Embed decompressed section contents in the JSON (base64; large!). Default: false.</summary>
     public bool IncludeSectionContents { get; set; }
 
+    /// <summary>Optional receiver for warnings found during export.</summary>
+    public Action<string>? ReportDiagnostic { get; set; }
+
     /// <summary>Explicit section names to embed when <see cref="IncludeSectionContents"/> is true;
     /// empty means every readable section.</summary>
     public HashSet<string> SectionsToInclude { get; } = new(StringComparer.OrdinalIgnoreCase);

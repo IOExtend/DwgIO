@@ -3,7 +3,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using DwgIO;
-using DwgIO.Internal;
+using DwgIO.Output;
 using DwgIO.Json;
 using DwgIO.Model;
 using DwgIO.Scene;

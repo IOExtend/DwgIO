@@ -1,6 +1,6 @@
 using System.Security.AccessControl;
 
-namespace DwgIO.Internal;
+namespace DwgIO.Output;
 
 internal static class AtomicOutput
 {

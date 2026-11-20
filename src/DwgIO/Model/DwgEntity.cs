@@ -42,7 +42,8 @@ public sealed class DwgEntity
     /// Point = [x,y,z]. Null for non-decoded kinds.</summary>
     public double[]? Geometry { get; init; }
 
-    internal bool IsModelSpace { get; init; } = true;
+    /// <summary>Whether the entity belongs directly to model space.</summary>
+    public bool IsModelSpace { get; init; } = true;
 
     /// <summary>DXF 62 colour index from the common preamble: the low 9 bits of the stored colour value,
     /// so 0 is BYBLOCK, 1 to 255 are indexed colours and 256 is BYLAYER.</summary>

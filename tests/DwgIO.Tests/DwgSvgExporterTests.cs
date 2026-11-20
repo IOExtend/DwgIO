@@ -151,10 +151,12 @@ public class DwgSvgExporterTests
             Entity(0x2A, DwgEntityKind.Line, "LINE", [0.0, 0.0, 0.0, double.NaN, 0.0, 0.0]),
             Entity(0x2B, DwgEntityKind.Line, "LINE", [0.0, 0.0, 0.0, 5.0, 0.0, 0.0]));
 
-        string svg = WriteToString(document);
+        var diagnostics = new List<string>();
+        string svg = WriteToString(document, new DwgSvgOptions { ReportDiagnostic = diagnostics.Add });
 
         Assert.Single(System.Xml.Linq.XDocument.Parse(svg).Descendants(XName("line")));
-        var diagnostic = Assert.Single(document.Diagnostics);
+        Assert.Empty(document.Diagnostics);
+        var diagnostic = Assert.Single(diagnostics);
         Assert.Contains("entity 2A", diagnostic, StringComparison.Ordinal);
     }
 

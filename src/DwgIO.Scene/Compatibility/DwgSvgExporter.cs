@@ -1,6 +1,6 @@
 using System.Globalization;
 using System.Xml;
-using DwgIO.Internal;
+using DwgIO.Output;
 using DwgIO.Model;
 
 namespace DwgIO.Scene;
@@ -50,7 +50,7 @@ public static class DwgSvgExporter
             throw new ArgumentException("DwgSvgOptions.StrokeWidth must be finite and positive.", nameof(options));
         }
 
-        var shapes = Collect(document, options.Scale);
+        var shapes = Collect(document, options);
         (double minX, double minY, double width, double height) = ViewBox(shapes);
         // Margins and markers are pixel values: they stay fixed while the scale zooms the drawing.
         double margin = Math.Max(0.02 * Math.Max(width, height), 8.0);
@@ -144,8 +144,9 @@ public static class DwgSvgExporter
 
     private sealed record SvgPoint(double X, double Y, int ColorIndex) : SvgShape(ColorIndex);
 
-    private static List<SvgShape> Collect(DwgDocument document, double scale)
+    private static List<SvgShape> Collect(DwgDocument document, DwgSvgOptions options)
     {
+        double scale = options.Scale;
         var shapes = new List<SvgShape>();
         foreach (var entity in document.Entities)
         {
@@ -163,7 +164,7 @@ public static class DwgSvgExporter
                     }
                     else
                     {
-                        Skip(document, entity, "non-finite coordinates");
+                        Skip(options.ReportDiagnostic, entity, "non-finite coordinates");
                     }
 
                     break;
@@ -174,7 +175,7 @@ public static class DwgSvgExporter
                     }
                     else
                     {
-                        Skip(document, entity, "non-finite or non-positive radius");
+                        Skip(options.ReportDiagnostic, entity, "non-finite or non-positive radius");
                     }
 
                     break;
@@ -188,7 +189,7 @@ public static class DwgSvgExporter
                     }
                     else
                     {
-                        Skip(document, entity, "non-finite or non-positive radius");
+                        Skip(options.ReportDiagnostic, entity, "non-finite or non-positive radius");
                     }
 
                     break;
@@ -199,7 +200,7 @@ public static class DwgSvgExporter
                     }
                     else
                     {
-                        Skip(document, entity, "non-finite coordinates");
+                        Skip(options.ReportDiagnostic, entity, "non-finite coordinates");
                     }
 
                     break;
@@ -209,8 +210,8 @@ public static class DwgSvgExporter
         return shapes;
     }
 
-    private static void Skip(DwgDocument document, DwgEntity entity, string reason) =>
-        document.ReportDiagnostic($"svg: entity {entity.Handle:X} ({entity.TypeName}) skipped: {reason}");
+    private static void Skip(Action<string>? reportDiagnostic, DwgEntity entity, string reason) =>
+        reportDiagnostic?.Invoke($"svg: entity {entity.Handle:X} ({entity.TypeName}) skipped: {reason}");
 
     private static bool IsUsable(params double[] values) => values.All(double.IsFinite);
 

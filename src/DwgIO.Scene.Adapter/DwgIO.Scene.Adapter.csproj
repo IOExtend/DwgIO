@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Converts a DWG drawing read by DwgIO to an IOScene document.</Description>
+    <PackageTags>dwg;autocad;cad;ioscene</PackageTags>
+    <!-- The prerelease upper bound keeps previews of the next breaking IOScene line out. -->
+    <NoWarn>$(NoWarn);NU5104</NoWarn>
+    <PinProjectReferencesExactly>true</PinProjectReferencesExactly>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(BuildNativeCoreOnly)' == 'true'">
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DwgIO\DwgIO.csproj" />
+    <PackageReference Include="IOScene" />
+    <Compile Include="..\Shared\ArcAngles.cs;..\Shared\DwgAciPalette.cs" Link="%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!-- The shared pack metadata expects icon.png beside the project; the adapter ships the engine's icon. -->
+  <ItemGroup>
+    <None Remove="$(MSBuildProjectDirectory)/icon.png" />
+    <None Include="..\DwgIO\icon.png" Pack="true" PackagePath="/" Visible="false" />
+  </ItemGroup>
+
+</Project>

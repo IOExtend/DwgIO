@@ -8,7 +8,9 @@ namespace DwgIO.Tests;
 
 public class DwgSceneReaderTests
 {
-    private static DwgDocument CreateDocument(params DwgEntity[] entities) =>
+    private static DwgDocument CreateDocument(params DwgEntity[] entities) => CreateDocument(entities, []);
+
+    private static DwgDocument CreateDocument(DwgEntity[] entities, string[] diagnostics) =>
         new(
             "synthetic.dwg",
             new DwgFileHeader
@@ -24,7 +26,8 @@ public class DwgSceneReaderTests
                 PreviewOffset = 0,
                 Codepage = 30,
             },
-            entities);
+            entities,
+            diagnostics: diagnostics);
 
     private static DwgEntity Entity(ulong handle, DwgEntityKind kind, string typeName, double[] geometry, int colorIndex = 256) =>
         new()
@@ -36,6 +39,17 @@ public class DwgSceneReaderTests
             Geometry = geometry,
             ColorIndex = colorIndex,
         };
+
+    [Fact]
+    public void LegacyAssemblyForwardsSceneApiToTheAdapter()
+    {
+        var adapter = typeof(DwgSceneReader).Assembly;
+        var legacy = System.Reflection.Assembly.Load("DwgIO.Scene");
+        Assert.Contains(typeof(DwgSceneReader), legacy.GetForwardedTypes());
+        Assert.Contains(typeof(DwgSceneOptions), legacy.GetForwardedTypes());
+        Assert.Contains(typeof(DwgSceneResult), legacy.GetForwardedTypes());
+        Assert.DoesNotContain(adapter.GetReferencedAssemblies(), name => name.Name is "IOScene.Formats" or "IOViewer");
+    }
 
     [Fact]
     public void Read_ConvertsLineAndPointToSceneGeometries()
@@ -147,8 +161,7 @@ public class DwgSceneReaderTests
     [Fact]
     public void Read_ForwardsDocumentDiagnostics()
     {
-        var document = CreateDocument();
-        document.ReportDiagnostic("AcDb:Handles: unexpected end");
+        var document = CreateDocument([], ["AcDb:Handles: unexpected end"]);
 
         var result = DwgSceneReader.Read(document, new DwgSceneOptions { ModelKey = "synthetic" });
 

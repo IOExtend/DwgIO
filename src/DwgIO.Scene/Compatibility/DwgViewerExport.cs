@@ -1,5 +1,5 @@
 using IOViewer.Exporters;
-using DwgIO.Internal;
+using DwgIO.Output;
 using IOScene;
 
 namespace DwgIO.Scene;
