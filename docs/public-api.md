@@ -87,10 +87,15 @@ IOScene.SceneJson.Save(result.Document, "drawing.scene.json");
 ```
 
 The scene validates against the IOScene contract (`SceneDocument.Validate` reports no error) and round-trips through
-the IOScene JSON format, so it can be fed to the IOScene tools, viewers and exporters. For HTML display, IOViewer
-0.3.1 represents lines and points with thin triangle geometry. The scene and exchange exports retain the original
-line and point geometry. `DwgSceneExport` writes it to
-OBJ (with an MTL colour library) and GLB through the IOScene.Formats writers.
+IOScene JSON with its original line and point topology. Use `dwgio scene drawing.dwg drawing.scene.json --unit mm`
+for a millimetre drawing when the consumer supports that topology. `DwgSceneExport` also preserves lines and points
+when writing OBJ (with an adjacent MTL colour library) or GLB through the IOScene.Formats writers.
+
+For standalone HTML, use `dwgio drawing.dwg drawing.html` or `DwgViewerExport.SaveViewer`. DwgIO turns lines and
+points into display-only triangle meshes without changing the source scene. In contrast, passing the raw scene
+JSON to stock `ioviewer drawing.scene.json -o drawing.html` in IOViewer 0.3.1 warns about and skips non-triangle
+instances. For example, on LibreDWG's [R2010 example drawing][dwg-example], DwgIO 0.5.0 exported 74 line and 46 point
+instances. IOViewer 0.3.1 embedded no drawable instances from that JSON, while direct DwgIO HTML included all 120.
 
 ## Diagnostics
 
@@ -99,3 +104,5 @@ opening the drawing and explicit section reads. `dwgio inspect` prints the first
 
 Use `DwgJsonExportOptions.ReportDiagnostic` or `DwgSvgOptions.ReportDiagnostic` to collect warnings during
 export. These warnings are reported independently of the document's read diagnostics.
+
+[dwg-example]: https://github.com/LibreDWG/libredwg/blob/ed54d84fd1eed1f63b2fdaff7ea056737d21267e/test/test-data/example_2010.dwg
