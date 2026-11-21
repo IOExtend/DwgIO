@@ -1,10 +1,10 @@
-# Private test fixtures
+# DWG test fixtures
 
 Most tests build their input in the test itself (cipher, decompression, checksums, bit reading, version detection,
 handle map, object stream and metadata parsing) and run everywhere. The fixture tests in `DwgFixtureTests` need real
-drawings. The repository ships no drawings yet. Private fixtures belong in the ignored test folder or outside the
-repository. Small redistributable drawings can be added under `test-files/public`. Once available, the fixture
-tests will use them in CI on Windows, Linux and macOS.
+drawings. The committed [public primitives](https://github.com/IOExtend/DwgIO/blob/main/test-files/public/README.md) cover R2010, R2013 and R2018
+in CI on Windows, Linux and macOS. Private fixtures still belong in the ignored test folder or outside the
+repository.
 
 ## Where the drawings are looked for
 
@@ -17,8 +17,8 @@ of these folders together:
 - a folder `test_files` in the repository root (or in any parent of the test binary folder).
 
 Every `*.dwg` file directly in such a folder or in one level of subfolders is used, whatever its name. Drawings of the
-supported releases (AC1018, AC1024, AC1027, AC1032) are the useful ones. AC1018 has been checked on real local drawings and
-still needs a redistributable fixture. Drawings of an unsupported version
+supported releases (AC1018, AC1024, AC1027, AC1032) are the useful ones. AC1018 still needs a public fixture.
+Drawings of an unsupported version
 (AC1012 to AC1015, AC1021) are ignored by the fixture tests and counted in the skip reason, so one file of a
 planned release does not fail every test.
 
@@ -39,5 +39,5 @@ DWGIO_TEST_FILES=<folder> dotnet test
 
 In PowerShell: `$env:DWGIO_TEST_FILES = '<folder>'; dotnet test`.
 
-Do not commit drawings, and do not put file names, object counts or other details of private drawings into tests,
+Do not commit private drawings or put their file names, object counts or other details into tests,
 comments or documentation.
