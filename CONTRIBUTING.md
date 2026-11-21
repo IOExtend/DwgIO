@@ -67,10 +67,8 @@ Run the compile check with a separate artifact directory.
 dotnet build src/DwgIO.Scene/DwgIO.Scene.csproj -c Release -p:BuildNativeCoreOnly=true --artifacts-path ./artifacts/native-core-check
 ```
 
-Tests that need real drawings are skipped with a message when no drawing is
-available. Set `DWGIO_TEST_FILES` to the folder containing your private
-drawings, or place them in a `test_files` folder, to run them. The repository
-ships no drawings. See [test fixtures](docs/test-fixtures.md).
+CI exercises the committed public drawings. Set `DWGIO_TEST_FILES` to the folder containing your private
+drawings, or place them in a `test_files` folder, to include them in local tests. See [test fixtures](docs/test-fixtures.md).
 
 ## Code conventions
 

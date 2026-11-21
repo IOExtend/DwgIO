@@ -24,6 +24,18 @@ internal static class TestFiles
         }
     }
 
+    /// <summary>Resolve a committed fixture only, without accepting a private file with the same name.</summary>
+    public static string PublicDrawing(string fileName)
+    {
+        for (var directory = AppContext.BaseDirectory; directory != null; directory = Path.GetDirectoryName(directory))
+        {
+            string candidate = Path.Combine(directory, "test-files", "public", fileName);
+            if (File.Exists(candidate)) return candidate;
+        }
+
+        throw new FileNotFoundException($"Committed DWG fixture '{fileName}' is missing.");
+    }
+
     /// <summary>Every *.dwg in the fixture folders (root plus one level of subfolders, so a mistyped variable cannot sweep a
     /// whole tree), sorted ordinally, or a <see cref="SkipException"/> when there is none.</summary>
     public static List<string> DwgFiles()
