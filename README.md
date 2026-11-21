@@ -213,7 +213,8 @@ dotnet build DwgIO.slnx -c Release
 dotnet test
 ```
 
-Tests requiring real DWG files are skipped with a message unless `DWGIO_TEST_FILES` or a `test_files` folder provides private drawings. The repository includes no DWG drawings. See [test fixtures](docs/test-fixtures.md).
+CI uses committed public drawings for R2010, R2013 and R2018. Set `DWGIO_TEST_FILES` or use a
+`test_files` folder to include private drawings in local tests. See [test fixtures](docs/test-fixtures.md).
 
 ## Contributing
 
