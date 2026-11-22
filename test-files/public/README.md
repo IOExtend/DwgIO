@@ -71,6 +71,8 @@ see `docs/test-fixtures.md`) remains the place for larger local test sets.
 
 ## The fixture search
 
-`TestFiles` looks for drawings in the folder named by `DWGIO_TEST_FILES`, in a `test_files` folder and in
-this `test-files/public` folder; one level of subfolders is searched too. Nothing else about the search
-changes: unsupported versions are skipped and counted, and a missing drawing never fails a test.
+For optional fixture checks, `TestFiles` looks in `DWGIO_TEST_FILES`, ancestor `test_files` and
+`test-files/public` folders, and one level of subfolders. Unsupported versions are skipped and counted;
+checks with no eligible drawing are skipped. The required `PublicDrawing_DecodesAuthoredPrimitives` theory
+instead reads the three committed files copied into the test output at build time. A missing copy fails
+that theory even when no private drawings are configured.
