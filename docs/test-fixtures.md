@@ -8,8 +8,11 @@ repository.
 
 ## Where the drawings are looked for
 
-The fixture tests find their input through one helper, `TestFiles` in the test project. Drawings are taken from all
-of these folders together:
+The required `PublicDrawing_DecodesAuthoredPrimitives` theory reads only the three committed drawings, copied
+to a dedicated subfolder of the test output at build time. This works even when `--artifacts-path` places the
+assembly outside the checkout.
+
+The optional fixture checks take drawings from all of these folders together:
 
 - the folder named by the environment variable `DWGIO_TEST_FILES` (ignored when the folder does not exist);
 - the committed redistributable drawings of [test-files/public](https://github.com/IOExtend/DwgIO/blob/main/test-files/public/README.md), with their
@@ -24,10 +27,11 @@ planned release does not fail every test.
 
 ## Without drawings
 
-When no drawing is found, the fixture tests are reported as **skipped with a reason** that names `DWGIO_TEST_FILES`.
-They never pass silently and never fail for lack of a file. The attributes `[SkippableFact]` and `[SkippableTheory]`
-(`SkippableFact.cs`) report a test that throws `SkipException` as skipped, because xunit 2.9 has no runtime skip of its
-own; `TestFiles` throws it when no drawing is available.
+Optional fixture checks are reported as **skipped with a reason** when no eligible drawing is available.
+If no drawing is found, the reason names `DWGIO_TEST_FILES`. The attributes `[SkippableFact]` and
+`[SkippableTheory]` (`SkippableFact.cs`) report `SkipException` as a skip, because xunit 2.9 has no runtime skip
+of its own. The public geometry theory requires all three committed drawings and fails if any is missing
+from the test output.
 
 No test uses a fixed absolute path.
 
