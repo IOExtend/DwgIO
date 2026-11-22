@@ -18,6 +18,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="../../test-files/public/primitives-*.dwg"
+          Link="PublicFixtures/%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\DwgIO\DwgIO.csproj" />
     <ProjectReference Include="..\..\src\DwgIO.Scene\DwgIO.Scene.csproj" />
     <ProjectReference Include="..\..\src\DwgIO.Cli\DwgIO.Cli.csproj" />
