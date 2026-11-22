@@ -4,9 +4,9 @@ using Xunit;
 namespace DwgIO.Tests;
 
 /// <summary>
-/// Smoke tests against private DWG files located by <see cref="TestFiles"/> (<c>DWGIO_TEST_FILES</c> or a
-/// <c>test_files</c> folder; no fixtures are committed to the repository). Each test checks every file and reports
-/// all failing files at once; with no file available it is reported as skipped with the reason.
+/// Smoke tests against committed public or optional private DWG files located by <see cref="TestFiles"/>.
+/// Each test checks every file and reports all failing files at once; if no eligible file is available,
+/// the test is reported as skipped with the reason.
 /// </summary>
 public class DwgFixtureTests
 {
@@ -39,8 +39,8 @@ public class DwgFixtureTests
         if (checkedFiles == 0)
         {
             throw new SkipException(unsupported > 0
-                ? $"No private fixture has {requirement}; {unsupported} drawing(s) of an unsupported version were ignored."
-                : $"No private fixture has {requirement}.");
+                ? $"No fixture has {requirement}; {unsupported} drawing(s) of an unsupported version were ignored."
+                : $"No fixture has {requirement}.");
         }
     }
 
@@ -52,6 +52,33 @@ public class DwgFixtureTests
         doc.Sections.Any(s => s.Name == name && s.Encryption != 1);
 
     private static string Diagnostics(DwgDocument doc) => string.Join(" | ", doc.Diagnostics);
+
+    [Theory]
+    [InlineData("AC1024", "primitives-ac1024.dwg")]
+    [InlineData("AC1027", "primitives-ac1027.dwg")]
+    [InlineData("AC1032", "primitives-ac1032.dwg")]
+    public void PublicDrawing_DecodesAuthoredPrimitives(string signature, string fileName)
+    {
+        var doc = DwgDocument.Open(TestFiles.PublicDrawing(fileName), new DwgReaderOptions { VerifyChecksums = true });
+
+        Assert.Equal(signature, doc.Version.Magic);
+        Assert.Equal(4, doc.Entities.Count(entity => entity.Geometry is not null));
+        AssertGeometry(doc, DwgEntityKind.Line, [1, 2, 3, 4, 6, 8]);
+        AssertGeometry(doc, DwgEntityKind.Arc, [-3, 7, 2, 5, Math.PI / 6, Math.PI / 2]);
+        AssertGeometry(doc, DwgEntityKind.Circle, [7, -2, 1, 4]);
+        AssertGeometry(doc, DwgEntityKind.Point, [-5, -6, 9]);
+    }
+
+    private static void AssertGeometry(DwgDocument document, DwgEntityKind kind, double[] expected)
+    {
+        var entity = Assert.Single(document.Entities, entity => entity.Kind == kind);
+        var geometry = Assert.IsType<double[]>(entity.Geometry);
+        Assert.Equal(expected.Length, geometry.Length);
+        for (int i = 0; i < expected.Length; i++)
+        {
+            Assert.Equal(expected[i], geometry[i], precision: 10);
+        }
+    }
 
     [SkippableFact]
     public void Open_ParsesSectionMap() => CheckAll(path =>

@@ -1,9 +1,7 @@
 namespace DwgIO.Tests;
 
-/// <summary>Where the tests find DWG fixtures: the folder named by the environment variable DWGIO_TEST_FILES, the committed
-/// redistributable drawings of test-files/public, and a test_files folder in the repository root (or in an ancestor of the test
-/// binary). Files may lie directly in a folder or in one level of subfolders. A test that needs a file which is not
-/// there is reported as skipped with the reason, never passed.</summary>
+/// <summary>Resolves required public DWG fixtures from the test output and finds optional inputs from
+/// DWGIO_TEST_FILES and fixture folders in ancestors of the test binary.</summary>
 internal static class TestFiles
 {
     public const string EnvironmentVariable = "DWGIO_TEST_FILES";
@@ -22,6 +20,15 @@ internal static class TestFiles
             candidate = Path.Combine(directory, "test_files");
             if (Directory.Exists(candidate)) yield return candidate;
         }
+    }
+
+    /// <summary>Resolve the build's fixture copy, never a private file with the same name.</summary>
+    public static string PublicDrawing(string fileName)
+    {
+        // Keep these copies outside the fixture roots searched by DwgFiles.
+        string path = Path.Combine(AppContext.BaseDirectory, "PublicFixtures", fileName);
+        if (File.Exists(path)) return path;
+        throw new FileNotFoundException($"Required public DWG fixture '{fileName}' is missing from the test output.", path);
     }
 
     /// <summary>Every *.dwg in the fixture folders (root plus one level of subfolders, so a mistyped variable cannot sweep a

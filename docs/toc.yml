@@ -5,7 +5,7 @@
   items:
     - name: Public API
       href: public-api.md
-    - name: Private test fixtures
+    - name: DWG test fixtures
       href: test-fixtures.md
 - name: API reference
   href: api/
