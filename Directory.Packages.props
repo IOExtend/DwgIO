@@ -12,7 +12,7 @@
   <ItemGroup>
     <!-- Neutral scene model, referenced by DwgIO.Scene with a range whose upper bound is a prerelease.
          IOScene.Formats (GLB and OBJ writers) ships as a preview and needs IOScene 0.1.1 or later. -->
-    <PackageVersion Include="IOScene" Version="[0.1.1, 0.2.0-0.0)" />
+    <PackageVersion Include="IOScene" Version="[0.1.2, 0.2.0-0.0)" />
     <PackageVersion Include="IOScene.Formats" Version="[0.1.0-preview.1]" />
     <!-- Standalone WebGL HTML viewer generator; accepts IOScene scene documents directly. -->
     <PackageVersion Include="IOViewer" Version="[0.3.1]" />
